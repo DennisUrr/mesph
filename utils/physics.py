@@ -3,17 +3,39 @@ from utils.sph_utils import gradient_gaussian_kernel
 
 
 def compute_thickness(r, ASPECTRATIO):
-    """Compute the thickness of the disk at a given radius r."""
+    """
+    Compute the thickness of the disk at a given radius r.
+
+    :param r: Radius at which the disk's thickness is calculated.
+    :param ASPECTRATIO: Aspect ratio of the disk.
+    :return: Thickness of the disk at the given radius.
+    """
     return ASPECTRATIO * r
 
 def differential_volume_3d(r, ASPECTRATIO):
-    """Compute the differential volume in 3D."""
+    """
+    Compute the differential volume in 3D cylindrical coordinates.
+
+    :param r: Radius in cylindrical coordinates.
+    :param ASPECTRATIO: Aspect ratio of the disk.
+    :return: Differential volume element in 3D cylindrical coordinates.
+    """
     H = compute_thickness(r, ASPECTRATIO)
     # Elemento de volumen en coordenadas cilíndricas (r, phi, z)
     return r * H * 2 * np.pi
 
+
+#REVISAR LA PARALELIZACIÓN DE ESTO
 def total_disk_mass_3d(rho, r, phi, ASPECTRATIO):
-    """Compute the total mass of the disk in 3D."""
+    """
+    Compute the total mass of the disk in 3D by integrating over the provided density grid.
+
+    :param rho: 3D density grid.
+    :param r: Radial coordinates grid.
+    :param phi: Azimuthal coordinates grid.
+    :param ASPECTRATIO: Aspect ratio of the disk.
+    :return: Total mass of the disk.
+    """
     total_mass = 0
     for i in range(len(r) - 1):
         for j in range(len(phi) - 1):
@@ -26,7 +48,17 @@ def total_disk_mass_3d(rho, r, phi, ASPECTRATIO):
     return total_mass
 
 def compute_particle_mass_3d(nr, nphi, rho, ASPECTRATIO, params, Ntot=10000):
-    """Compute the mass of each particle in 3D."""
+    """
+    Compute the mass of each particle in 3D, assuming a uniform distribution of particles in the disk.
+
+    :param nr: Number of radial divisions in the grid.
+    :param nphi: Number of azimuthal divisions in the grid.
+    :param rho: 3D density grid.
+    :param ASPECTRATIO: Aspect ratio of the disk.
+    :param params: Parameter dictionary containing simulation limits.
+    :param Ntot: Total number of particles.
+    :return: Mass of each particle.
+    """
     if params is None:
         raise ValueError("params dictionary is required")
 
@@ -42,18 +74,42 @@ def compute_particle_mass_3d(nr, nphi, rho, ASPECTRATIO, params, Ntot=10000):
 
 
 def compute_pressure(densities, internal_energies, gamma):
-    
-    """Computa la presión usando la relación isotérmica."""
+    """
+    Compute the pressure for each particle using the ideal gas law.
+
+    :param densities: Array of densities for each particle.
+    :param internal_energies: Array of internal energies for each particle.
+    :param gamma: Adiabatic index.
+    :return: Array of pressures for each particle.
+    """
     return (gamma-1) * internal_energies * densities
 
 # @timed
 def compute_speed_sound(internal_energies, gamma):
+    """
+    Compute the speed of sound for each particle.
+
+    :param internal_energies: Array of internal energies for each particle.
+    :param gamma: Adiabatic index.
+    :return: Array of sound speeds for each particle.
+    """
     cs_square = (gamma - 1) * internal_energies
     cs = np.sqrt(cs_square)
     return cs
 
-'''
+
 def compute_artificial_viscosity_3d_partial(positions, vx, vy, vz, densities, internal_energies, h_values, alpha=1, beta=2):
+    """
+    Calculates artificial viscosity for a subset of particles in 3D.
+
+    :param positions: Positions of particles (Nx3 numpy array).
+    :param vx, vy, vz: Velocities of particles in x, y, z directions (numpy arrays).
+    :param densities: Densities of particles (numpy array).
+    :param internal_energies: Internal energies of particles (numpy array).
+    :param h_values: Smoothing lengths of particles (numpy array).
+    :param alpha, beta: Parameters for artificial viscosity.
+    :return: Artificial viscosity values for each particle (numpy array).
+    """
     N = positions.shape[0]
 
     # Inicializa el array de viscosidad
@@ -84,6 +140,17 @@ def compute_artificial_viscosity_3d_partial(positions, vx, vy, vz, densities, in
     return pi_c_i
 
 def compute_acceleration_3d_partial(positions, densities, pressures, mass, h_values, viscosities):
+    """
+    Computes acceleration for a subset of particles in 3D.
+
+    :param positions: Positions of particles (Nx3 numpy array).
+    :param densities: Densities of particles (numpy array).
+    :param pressures: Pressures of particles (numpy array).
+    :param mass: Mass of each particle (scalar).
+    :param h_values: Smoothing lengths of particles (numpy array).
+    :param viscosities: Viscosity values for particles (numpy array).
+    :return: Acceleration vectors for each particle (Nx3 numpy array).
+    """
     N = positions.shape[0]
 
     # Inicializa los arrays de aceleración
@@ -116,9 +183,21 @@ def compute_acceleration_3d_partial(positions, densities, pressures, mass, h_val
                     acceleration_z[i] += a_z
 
     return np.vstack((acceleration_x, acceleration_y, acceleration_z)).T
-'''
 
-def compute_artificial_viscosity_3d_partial(positions, vx, vy, vz, densities, internal_energies, h_values, alpha=1, beta=2):
+
+def compute_artificial_viscosity_3d_partial_vectorized(positions, vx, vy, vz, densities, internal_energies, h_values, alpha=1, beta=2):
+    """
+    Vectorized version to compute acceleration for a subset of particles in 3D.
+
+    :param positions: Positions of particles (Nx3 numpy array).
+    :param densities: Densities of particles (numpy array).
+    :param pressures: Pressures of particles (numpy array).
+    :param mass: Mass of each particle (scalar).
+    :param h_values: Smoothing lengths of particles (numpy array).
+    :param viscosities: Viscosity values for particles (numpy array).
+    :return: Acceleration vectors for each particle (Nx3 numpy array).
+    """
+
     N = positions.shape[0]
 
     # Inicializa el array de viscosidad
@@ -153,7 +232,25 @@ def compute_artificial_viscosity_3d_partial(positions, vx, vy, vz, densities, in
 
 
 
-def compute_acceleration_3d_partial(positions, densities, pressures, mass, h_values, viscosities):
+def compute_acceleration_3d_partial_vectorized(positions, densities, pressures, mass, h_values, viscosities):
+    """
+    Computes accelerations for a subset of particles in a 3D space using a vectorized approach.
+
+    This function calculates gravitational and hydrodynamic accelerations based on the Smoothed Particle Hydrodynamics (SPH) methodology. It uses a Gaussian kernel for smoothing and takes into account the artificial viscosity to simulate viscous effects.
+
+    Parameters:
+    - positions (numpy array): The positions of the particles in 3D space. This should be an Nx3 array where N is the number of particles.
+    - densities (numpy array): The densities of the particles. This should be a 1D array of length N.
+    - pressures (numpy array): The pressures at the positions of the particles. This should be a 1D array of length N.
+    - mass (float): The mass of each particle. In SPH, all particles typically have the same mass.
+    - h_values (numpy array): The smoothing lengths for each particle, used in the kernel function. This should be a 1D array of length N.
+    - viscosities (numpy array): The viscosity values for each particle, used in the artificial viscosity calculation. This should be a 1D array of length N.
+
+    Returns:
+    - acceleration (numpy array): The calculated accelerations for each particle. This will be an Nx3 array where each row corresponds to the acceleration vector of a particle.
+
+    The function uses numpy's advanced broadcasting and vectorized operations to efficiently compute accelerations for all particles. It calculates pairwise interactions between particles and sums up their contributions to find the total acceleration on each particle.
+    """
     N = positions.shape[0]
 
     # Inicializa los arrays de aceleración

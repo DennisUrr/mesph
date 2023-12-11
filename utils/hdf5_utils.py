@@ -5,9 +5,9 @@ from math import pi
 
 def create_unique_directory(base_path):
     """
-    Crea un directorio único. Si el directorio base ya existe, crea uno nuevo con un índice incremental.
-    :param base_path: La ruta base del directorio a crear.
-    :return: La ruta del directorio creado.
+    Creates a unique directory. If the base directory already exists, it creates a new one with an incremental index.
+    :param base_path: The base path of the directory to be created.
+    :return: The path of the created directory.
     """
     counter = 0
     new_path = base_path
@@ -19,15 +19,27 @@ def create_unique_directory(base_path):
     return new_path
 
 def create_snapshot_file(dT, file_idx, Ntot, positions_3d, velocities, ids, masses, particle_energies, densities, h_values, accelerations, pressures, viscosities, base_filename, total_files, unique_dir):
+    """
+    Creates a snapshot file for a specific time and file index with particle data in HDF5 format.
 
-    # Define el nombre de archivo completo con la ruta al directorio único
+    :param dT: Time step of the snapshot.
+    :param file_idx: File index for the current snapshot part.
+    :param Ntot: Total number of particles.
+    :param positions_3d, velocities, ids, masses, particle_energies, densities, h_values, accelerations, pressures, viscosities: Particle properties arrays.
+    :param base_filename: The base name for the snapshot files.
+    :param total_files: Total number of files per snapshot.
+    :param unique_dir: The directory where the snapshot file will be saved.
+
+    The function creates a snapshot file named with the time step and file index, containing all the provided particle properties.
+    """
+    # Define the full filename with the path to the unique directory
     filename = os.path.join(unique_dir, f'{base_filename}_{int(dT):03d}.{file_idx}.hdf5')
 
     with h5py.File(filename, 'w') as f:
-        # Crear el grupo Header y establecer los atributos
+        # Create the Header group and set attributes
         header = f.create_group("/Header")
         header.attrs['NumPart_ThisFile'] = [Ntot, 0, 0, 0, 0, 0]
-        header.attrs['NumPart_Total'] = [Ntot * total_files, 0, 0, 0, 0, 0]  # Ntot * total_files es el total de partículas en todos los archivos
+        header.attrs['NumPart_Total'] = [Ntot * total_files, 0, 0, 0, 0, 0]  # Ntot * total_files is the total number of particles across all files
         header.attrs['NumPart_Total_HighWord'] = [0, 0, 0, 0, 0, 0]
         header.attrs['MassTable'] = [0, 0, 0, 0, 0, 0]
         header.attrs['Time'] = int(dT)*pi
@@ -35,7 +47,7 @@ def create_snapshot_file(dT, file_idx, Ntot, positions_3d, velocities, ids, mass
         header.attrs["NumFilesPerSnapshot"] = total_files
         header.attrs["Dimension"] = 3
 
-        # Crear el grupo PartType0 y agregar los datasets
+        # Create the PartType0 group and add datasets
         pt0 = f.create_group("/PartType0")
         pt0.create_dataset("Coordinates", data=positions_3d)
         pt0.create_dataset("Velocities", data=velocities)
@@ -47,19 +59,20 @@ def create_snapshot_file(dT, file_idx, Ntot, positions_3d, velocities, ids, mass
         pt0.create_dataset("Acceleration", data=accelerations)
         pt0.create_dataset("Pressure", data=pressures)
         pt0.create_dataset("Viscosity", data=viscosities)
-
+        
+    print("==============================================================\n", "========= HDF5 File "+ str(dT) +"."+ str(file_idx) +" Created. =========\n", "==============================================================")
 
 
 def copy_files_to_directory(source_files, destination_directory):
     """
-    Copia archivos a un directorio destino.
+    Copies files to a destination directory.
     
-    :param source_files: Lista de rutas de archivos a copiar.
-    :param destination_directory: Ruta del directorio destino.
+    :param source_files: List of file paths to copy.
+    :param destination_directory: Path of the destination directory.
     """
     for file in source_files:
-        # Asegúrate de que el archivo de origen existe antes de intentar copiarlo
+        # Ensure the source file exists before attempting to copy
         if os.path.isfile(file):
             shutil.copy(file, destination_directory)
         else:
-            print(f"El archivo {file} no existe y no se puede copiar.")
+            print(f"The file {file} does not exist and cannot be copied.")

@@ -3,7 +3,18 @@ from multiprocessing import Pool
 
 def sample_particles_3d_partial(rho, phi, theta, rmed, phimed, thetamed, r, start_idx, end_idx):
     """
-    Muestrea un subconjunto de partículas de 'start_idx' a 'end_idx'.
+    Samples a subset of particles from 'start_idx' to 'end_idx' using a rejection sampling method
+    based on the local density distribution from a 3D grid.
+
+    This function is designed to be used in a parallel processing context where the sampling
+    of particles is distributed across multiple processes.
+
+    :param rho: 3D density grid from simulation data.
+    :param phi, theta: Angular coordinates from the simulation grid.
+    :param rmed, phimed, thetamed: Median values of the radial, azimuthal, and polar angles.
+    :param r: Radial coordinate array.
+    :param start_idx, end_idx: Start and end indices for particle sampling in this subset.
+    :return: Arrays of sampled r, phi, and theta values for the particles.
     """
     local_Ntot = end_idx - start_idx
     sigma = rho.sum(axis=0)  # Suma a lo largo del eje de 'theta'
@@ -36,29 +47,15 @@ def sample_particles_3d_partial(rho, phi, theta, rmed, phimed, thetamed, r, star
 
     return rlist, philist, thetalist
 
-def parallel_sample_particles_3d(rho, phi, theta, rmed, phimed, thetamed, Ntot, num_processes):
-    """
-    Paraleliza el muestreo de partículas utilizando múltiples procesos.
-    """
-    pool = Pool(processes=num_processes)
-    chunk_size = Ntot // num_processes
-    results = []
-
-    for i in range(num_processes):
-        start_idx = i * chunk_size
-        end_idx = (i + 1) * chunk_size if i != num_processes - 1 else Ntot
-        results.append(pool.apply_async(sample_particles_3d_partial, (rho, phi, theta, rmed, phimed, thetamed, start_idx, end_idx, Ntot)))
-    
-    pool.close()
-    pool.join()
-
-    # Combina los resultados de todos los procesos
-    rlists, philists, thetalists = zip(*[result.get() for result in results])
-    return np.concatenate(rlists), np.concatenate(philists), np.concatenate(thetalists)
-
 def assign_particle_densities_from_grid_3d_partial(rho, rlist, philist, thetalist, rmed, phimed, thetamed, start_idx, end_idx):
     """
-    Asigna densidades a un subconjunto de partículas basadas en la densidad del grid 3D de FARGO3D.
+    Assigns densities to a subset of particles based on the 3D density grid from FARGO3D.
+
+    :param rho: 3D density grid from the simulation.
+    :param rlist, philist, thetalist: Lists of radial, azimuthal, and polar coordinates of particles.
+    :param rmed, phimed, thetamed: Median values for the simulation grid coordinates.
+    :param start_idx, end_idx: Start and end indices for processing this subset of particles.
+    :return: Array of densities assigned to each particle in the subset.
     """
     local_Ntot = end_idx - start_idx
     particle_densities = np.zeros(local_Ntot)
@@ -75,22 +72,21 @@ def assign_particle_densities_from_grid_3d_partial(rho, rlist, philist, thetalis
         if 0 <= ir < len(rmed) and 0 <= iphi < len(phimed) and 0 <= itheta < len(thetamed):
             particle_densities[idx] = rho[itheta, ir, iphi]
 
+    print("Density sampling completed.")
+
     return particle_densities
 
 def assign_particle_velocities_from_grid_3d_partial(vphi, vr, vtheta, rlist, philist, thetalist, rmed, phimed, thetamed, start_idx, end_idx):
     """
-    Asigna velocidades a un subconjunto de partículas basadas en la velocidad del grid 3D de FARGO3D.
+    Assigns velocities to a subset of particles based on the 3D velocity grid from FARGO3D.
+
+    :param vphi, vr, vtheta: 3D arrays of azimuthal, radial, and polar velocities from the simulation.
+    :param rlist, philist, thetalist: Lists of coordinates for particles.
+    :param rmed, phimed, thetamed: Median values for the grid coordinates.
+    :param start_idx, end_idx: Indices for the subset of particles to process.
+    :return: Arrays of azimuthal, radial, and polar velocities for each particle in the subset.
     """
-    print("=====| rlist.shape:  ", rlist.shape , "    |=====")
-    print("=====| philist.shape: ", philist.shape, "    |=====")
-    print("=====| thetalist.shape: ", thetalist.shape, " |=====")
-
     local_Ntot = (end_idx - start_idx)
-
-    print("=====| start_idx:  ", start_idx , "    |=====")
-    print("=====| end_idx: ", end_idx, "    |=====")
-    print("=====| local_Ntot: ", local_Ntot, " |=====")
-
     particle_vphi = np.zeros(local_Ntot)
     particle_vr = np.zeros(local_Ntot)
     particle_vtheta = np.zeros(local_Ntot)
@@ -114,7 +110,15 @@ def assign_particle_velocities_from_grid_3d_partial(vphi, vr, vtheta, rlist, phi
 
 def assign_particle_internal_energies_from_grid_3d_partial(rlist, philist, thetalist, grid_energies, rmed, phimed, thetamed, start_idx, end_idx):
     """
-    Asigna energía interna a un subconjunto de partículas basadas en la energía interna del grid 3D de FARGO3D.
+    Assigns internal energies to a subset of particles based on the 3D internal energy grid from FARGO3D.
+
+    This function maps the internal energies from the grid to the particle representation, considering only a specific range of particles (defined by start_idx and end_idx) for efficient parallel processing.
+
+    :param rlist, philist, thetalist: Lists of coordinates for particles.
+    :param grid_energies: 3D grid of internal energies from the simulation.
+    :param rmed, phimed, thetamed: Median values for the grid coordinates.
+    :param start_idx, end_idx: Indices for the subset of particles to process.
+    :return: Array of internal energies assigned to each particle in the subset.
     """
     local_Ntot = end_idx - start_idx
     particle_energies = np.zeros(local_Ntot)
@@ -131,17 +135,29 @@ def assign_particle_internal_energies_from_grid_3d_partial(rlist, philist, theta
         if 0 <= ir < len(rmed) and 0 <= iphi < len(phimed) and 0 <= itheta < len(thetamed):
             particle_energies[idx] = grid_energies[itheta, ir, iphi]
 
+    print("Internal energy sampling completed.")
+
     return particle_energies
 
 
-############################################################################################################
+
 ############################################################################################################
 ######                                      SAMPLING TRILINEAL                                      ########
 ############################################################################################################
-############################################################################################################
 
-
+# on develop by the moment (2021-09-30)
 def sample_particles_3d_vectorized(rho, grid, Ntot, oversampling_factor=2):
+    """
+    Samples particles using a vectorized approach with trilinear interpolation.
+
+    This method uses oversampling and filtering based on interpolated densities to efficiently and accurately sample particles in the simulation domain.
+
+    :param rho: 3D density grid from simulation data.
+    :param grid: Grid arrays for r, phi, and theta coordinates.
+    :param Ntot: Total number of particles to sample.
+    :param oversampling_factor: Factor to control the initial oversampling rate.
+    :return: Arrays of sampled r, phi, and theta coordinates for the particles.
+    """
     # Estimar cuántos puntos generar (puede necesitar ajustes)
     num_candidates = int(Ntot * oversampling_factor)
 
@@ -165,6 +181,14 @@ def sample_particles_3d_vectorized(rho, grid, Ntot, oversampling_factor=2):
     return accepted_r, accepted_phi, accepted_theta
 
 def trilinear_interpolation(point, grid, values):
+    """
+    Performs trilinear interpolation for a given point within a 3D grid.
+
+    :param point: The point (r, phi, theta) where interpolation is to be performed.
+    :param grid: Grid arrays for r, phi, and theta coordinates.
+    :param values: 3D array of values corresponding to the grid points.
+    :return: Interpolated value at the given point.
+    """
     # Encuentra los índices de los puntos de la cuadrícula que rodean el punto de interés
     r_idx, phi_idx, theta_idx = [
         max(min(np.searchsorted(grid[dim], point[dim]) - 1, len(grid[dim]) - 2), 0)
@@ -189,13 +213,25 @@ def trilinear_interpolation(point, grid, values):
                 interpolated_value += weight * values[theta_idx + k, r_idx + i, phi_idx + j]
     return interpolated_value
 
+
+#revisar esta función
 def sample_particles_3d_interpolated(rho, rmed, phimed, thetamed, start_idx, end_idx):
+    """
+    Samples particles using trilinear interpolation within a specific range defined by start_idx and end_idx.
+
+    This function is suitable for parallel processing where the sampling task is divided among multiple processors.
+
+    :param rho: 3D density grid from simulation data.
+    :param rmed, phimed, thetamed: Median values for the grid coordinates.
+    :param start_idx, end_idx: Indices defining the range of particles to sample.
+    :return: Arrays of sampled r, phi, and theta coordinates for the particles in the specified range.
+    """
     local_Ntot = end_idx - start_idx
     rlist = np.zeros(local_Ntot)
     philist = np.zeros(local_Ntot)
     thetalist = np.zeros(local_Ntot)
 
-    # Crear una cuadrícula para la interpolación
+    # Crear una cuadrícula para la interpolación [aquiiii]
     grid = [rmed, phimed, thetamed]
 
     N = 0
