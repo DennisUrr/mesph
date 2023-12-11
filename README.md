@@ -24,4 +24,4 @@ For instance, if you have 20 Fargo output files (like `domain.dat`, `gasdens{n}.
 You can run the script with custom parameters like this:
 
 ```bash
-python3 main_parallel.py -p 8 --t 20
+python3 main_parallel.py -p 8 -t 20
