@@ -98,7 +98,7 @@ def process_file(file_idx, dT, params, gamma, ASPECTRATIO, alpha, beta, total_cp
     ids = np.arange(start_idx, end_idx, dtype=np.int32)
     
     # Create snapshot file
-    create_snapshot_file(dT, file_idx, Ntot_per_file, positions_3d, velocities, ids, masses, particle_energies, densities, h_values, accelerations, pressures, viscosities, base_filename, total_cpus, unique_dir)
+    create_snapshot_file(dT, file_idx, Ntot_per_file, positions_3d, velocities, ids, masses, particle_energies, densities, h_values, accelerations, pressures, viscosities, base_filename, total_files, unique_dir)
 
 
 def main_parallel_1(total_cpus, output_dir, path_outputs_fargo, total_timesteps, Ntot, alpha, beta, total_files):
