@@ -72,7 +72,7 @@ def assign_particle_densities_from_grid_3d_partial(rho, rlist, philist, thetalis
         if 0 <= ir < len(rmed) and 0 <= iphi < len(phimed) and 0 <= itheta < len(thetamed):
             particle_densities[idx] = rho[itheta, ir, iphi]
 
-    print("Density sampling completed.")
+    # print("Density sampling completed.")
 
     return particle_densities
 
@@ -135,7 +135,7 @@ def assign_particle_internal_energies_from_grid_3d_partial(rlist, philist, theta
         if 0 <= ir < len(rmed) and 0 <= iphi < len(phimed) and 0 <= itheta < len(thetamed):
             particle_energies[idx] = grid_energies[itheta, ir, iphi]
 
-    print("Internal energy sampling completed.")
+    # print("Internal energy sampling completed.")
 
     return particle_energies
 

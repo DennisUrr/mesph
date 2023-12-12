@@ -2,6 +2,7 @@ import time
 import numpy as np
 import os
 from multiprocessing import cpu_count, Pool
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from utils.parameters import read_parameters
 from utils.conversions import to_cartesian_3d, velocities_to_cartesian_3d
 from utils.sampling import sample_particles_3d_partial, assign_particle_velocities_from_grid_3d_partial, assign_particle_densities_from_grid_3d_partial, assign_particle_internal_energies_from_grid_3d_partial, sample_particles_3d_interpolated
@@ -10,6 +11,7 @@ from utils.sph_utils import compute_smoothing_length_3d
 from utils.hdf5_utils import create_snapshot_file, create_unique_directory, copy_files_to_directory
 from run_splash import run_splash
 import argparse
+from tqdm import tqdm
 
 def sample_and_convert_particles(task):
     """
@@ -108,7 +110,7 @@ def main_parallel_1(total_cpus, output_dir, path_outputs_fargo, total_timesteps,
     global params, gamma, ASPECTRATIO, Ntot_per_file, phi, r, theta, phimed, rmed, thetamed, nphi, nr, ntheta
 
     unique_dir = create_unique_directory(output_dir)
-    print(f"Unique directory created: {unique_dir}")
+    # print(f"Unique directory created: {unique_dir}")
 
     params = read_parameters( path_outputs_fargo + "/variables.par")
     gamma = float(params['GAMMA'])
@@ -146,7 +148,7 @@ def main_parallel_1(total_cpus, output_dir, path_outputs_fargo, total_timesteps,
         # load the gas internal energy
         u = np.fromfile( path_outputs_fargo + '/gasenergy' + dT + '.dat').reshape(len(theta)-1, len(r), len(phi)-1)
 
-        print("FARGO3D files loaded")
+        # print("FARGO3D files loaded")
         for file_idx in range(total_files):
             start_idx = file_idx * Ntot_per_file
             end_idx = start_idx + Ntot_per_file if file_idx != total_files - 1 else Ntot
@@ -222,17 +224,23 @@ def main_parallel_2(total_cpus, output_dir, path_outputs_fargo, total_timesteps,
         # load the gas internal energy
         u = np.fromfile( path_outputs_fargo + '/gasenergy' + dT + '.dat').reshape(len(theta)-1, len(r), len(phi)-1)
 
-        print("FARGO3D files loaded")
+        # print("FARGO3D files loaded")
         for file_idx in range(total_files):
             start_idx = file_idx * Ntot_per_file
             end_idx = start_idx + Ntot_per_file if file_idx != total_files - 1 else Ntot
             # Add a task for each file
             tasks.append((file_idx, dT, params, gamma, ASPECTRATIO, alpha, beta, total_cpus, Ntot, Ntot_per_file, rho, phi, theta, r, phimed, rmed, thetamed, vphi, vr, vtheta, u, nr, ntheta, start_idx, end_idx, unique_dir))
 
-    # create a process pool and execute process_file in parallel for all tasks
-    with Pool(total_cpus) as pool:
-        #pool.starmap(process_file, tasks)
-        pool.starmap(process_file, tasks)
+    # # create a process pool and execute process_file in parallel for all tasks
+    # with Pool(total_cpus) as pool:
+    #     #pool.starmap(process_file, tasks)
+    #     pool.starmap(process_file, tasks)
+    with ProcessPoolExecutor(max_workers=total_cpus) as executor:
+        futures = [executor.submit(process_file, *task) for task in tasks]
+        with tqdm(total=len(tasks), desc='Processing files') as progress_bar:
+            for future in as_completed(futures):
+                progress_bar.update(1)
+    
 
     source_files = ['outputs/splash.defaults', 'outputs/splash.limits']
     destination_directory = unique_dir
@@ -257,7 +265,7 @@ if __name__ == '__main__':
     parser.add_argument('-o', '--output', type=str, default='outputs/snapshot', help='Output directory for the generated HDF5 files.')
     
     # Directory containing FARGO3D output files
-    parser.add_argument('-of', '--output_fargo', type=str, default='../../public/outputs/p3disof/', help='Directory containing FARGO3D output files.')
+    parser.add_argument('-of', '--output_fargo', type=str, default='../public/outputs/p3disof/', help='Directory containing FARGO3D output files.')
     
     # Number of time steps to process
     parser.add_argument('-t', '--times', type=int, default=1, help='Number of time steps to process.')
@@ -286,8 +294,8 @@ if __name__ == '__main__':
     total_files = int(args.total_files)
     mode = args.mode
     
-    print(f"Total CPUs: {total_cpus}")
-    print(f"total_files: {total_files}")
+    # print(f"Total CPUs: {total_cpus}")
+    # print(f"total_files: {total_files}")
 
     if mode==1:
         main_parallel_1(total_cpus, output_dir, path_outputs_fargo, total_timesteps, Ntot, alpha, beta, total_files)

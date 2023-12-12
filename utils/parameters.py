@@ -11,5 +11,5 @@ def read_parameters(filename):
                     key, value = line.strip().split("\t")
                     params[key.strip()] = value.strip()
         return params
-    print("ERROR")
+    print("ERROR: The given file does not exist and it's required to run the program.")
     return {}

@@ -12,7 +12,9 @@ def run_splash(total_timesteps, file_idx, output_dir):
 
     # Cambia al último directorio creado
     os.chdir(output_dir)
+    command = ' '.join(command)
 
+    #print(string in command : string)
     print(command)
     # Ejecuta el comando
     #subprocess.run(command)
