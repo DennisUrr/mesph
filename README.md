@@ -16,6 +16,7 @@ The script `main_parallel.py` can be executed with several optional arguments to
 - `-a` / `--alpha`: Alpha parameter for artificial viscosity. Defaults to 0.6.
 - `-b` / `--beta`: Beta parameter for artificial viscosity. Defaults to 1.
 - `-tf` / `--total_files`: Number of files per snapshot. Defaults to 2.
+- `m` / `--mode`: Mode of paralellism. Defaults to 1. Better 2.
 
 ### Running the Script
 
@@ -24,4 +25,4 @@ For instance, if you have 20 Fargo output files (like `domain.dat`, `gasdens{n}.
 You can run the script with custom parameters like this:
 
 ```bash
-python3 main_parallel.py -p 8 -t 20 -tf 8
+python3 main_parallel.py -p 8 -t 20 -tf 8 -m 2
