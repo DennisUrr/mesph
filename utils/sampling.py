@@ -26,6 +26,7 @@ def sample_particles_3d_partial(rho, phi, theta, rmed, phimed, thetamed, r, star
 
     phi_area = (phi.max() - phi.min()) / (len(phi) - 1)
     r_area = (r.max() - r.min()) / (len(r) - 4)  # ajuste debido a [3:-4] al cargar 'r'
+    theta_area = (theta.max() - theta.min()) / (len(theta) - 1)
 
     N = start_idx
     while N < end_idx:
@@ -35,8 +36,7 @@ def sample_particles_3d_partial(rho, phi, theta, rmed, phimed, thetamed, r, star
         
         iphi = min(int((_phi - phi.min()) / phi_area), len(phimed) - 1)
         ir = min(int((_r - r.min()) / r_area), len(rmed) - 1)
-        itheta = np.random.randint(len(thetamed))
-
+        itheta = min(int((_theta - theta.min()) / theta_area), len(thetamed) - 1)
         _w = np.random.rand()
         
         if _w < P[ir, iphi]:

@@ -1,7 +1,7 @@
 
 import os
 
-def run_splash(total_timesteps, file_idx, output_dir):
+def run_splash(total_timesteps, output_dir):
     base_filename = "snapshot_3d"
 
     # Construye los nombres de archivo
@@ -10,11 +10,12 @@ def run_splash(total_timesteps, file_idx, output_dir):
     # Construye el comando completo
     command = ["splash", "-f", "gadget_hdf5"] + filenames
 
-    # Cambia al último directorio creado
-    os.chdir(output_dir)
-    command = ' '.join(command)
+    # Genera el script shell
+    shell_script_name = "run_splash.sh"
+    with open(shell_script_name, "w") as file:
+        file.write("#!/bin/bash\n")
+        file.write("cd " + output_dir + "\n")
+        file.write(' '.join(command) + "\n")
 
-    #print(string in command : string)
-    print(command)
-    # Ejecuta el comando
-    #subprocess.run(command)
+    # Hace el script ejecutable
+    os.chmod(shell_script_name, 0o755)

@@ -61,7 +61,7 @@ def create_snapshot_file(dT, file_idx, Ntot, positions_3d, velocities, ids, mass
         pt0.create_dataset("Viscosity", data=viscosities)
         
     #print("==============================================================\n", "========= HDF5 File "+ str(dT) +"."+ str(file_idx) +" Created. =========\n", "==============================================================")
-
+    print(dT, '.' ,file_idx, " Created.")
 
 def copy_files_to_directory(source_files, destination_directory):
     """
