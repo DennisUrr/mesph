@@ -48,7 +48,7 @@ def create_snapshot_file(dT, file_idx, Ntot, positions_3d, velocities, ids, mass
         header.attrs["Dimension"] = 3
 
         # Create the PartType0 group and add datasets
-        pt0 = f.create_group("/PartType0")
+        pt0 = f.create_group("/PartType0") # GAS
         pt0.create_dataset("Coordinates", data=positions_3d)
         pt0.create_dataset("Velocities", data=velocities)
         pt0.create_dataset("ParticleIDs", data=ids)
@@ -59,9 +59,9 @@ def create_snapshot_file(dT, file_idx, Ntot, positions_3d, velocities, ids, mass
         pt0.create_dataset("Acceleration", data=accelerations)
         pt0.create_dataset("Pressure", data=pressures)
         pt0.create_dataset("Viscosity", data=viscosities)
-        
+
     #print("==============================================================\n", "========= HDF5 File "+ str(dT) +"."+ str(file_idx) +" Created. =========\n", "==============================================================")
-    print(dT, '.' ,file_idx, " Created.")
+    #print(dT, '.' ,file_idx, " Created.")
 
 def copy_files_to_directory(source_files, destination_directory):
     """

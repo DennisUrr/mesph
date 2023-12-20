@@ -1,5 +1,6 @@
 import numpy as np
-from multiprocessing import Pool
+from scipy.interpolate import RegularGridInterpolator, Rbf
+from utils.conversions import spherical_to_cartesian, to_cartesian
 
 def sample_particles_3d_partial(rho, phi, theta, rmed, phimed, thetamed, r, start_idx, end_idx):
     """
@@ -145,112 +146,31 @@ def assign_particle_internal_energies_from_grid_3d_partial(rlist, philist, theta
 ######                                      SAMPLING TRILINEAL                                      ########
 ############################################################################################################
 
-# on develop by the moment (2021-09-30)
-def sample_particles_3d_vectorized(rho, grid, Ntot, oversampling_factor=2):
-    """
-    Samples particles using a vectorized approach with trilinear interpolation.
+def sample_from_density_grid(rho, r, phi, theta, start_idx, end_idx):
+    try:
+        num_particles = end_idx - start_idx
+        
+        # Aplanar rho para obtener un array 1D
+        rho_flat = rho.flatten()
 
-    This method uses oversampling and filtering based on interpolated densities to efficiently and accurately sample particles in the simulation domain.
+        # Generar probabilidades a partir de rho
+        probabilities = rho_flat / np.sum(rho_flat)
 
-    :param rho: 3D density grid from simulation data.
-    :param grid: Grid arrays for r, phi, and theta coordinates.
-    :param Ntot: Total number of particles to sample.
-    :param oversampling_factor: Factor to control the initial oversampling rate.
-    :return: Arrays of sampled r, phi, and theta coordinates for the particles.
-    """
-    # Estimar cuántos puntos generar (puede necesitar ajustes)
-    num_candidates = int(Ntot * oversampling_factor)
+        # Generar índices de muestreo basados en estas probabilidades
+        sampled_indices = np.random.choice(len(rho_flat), size=num_particles, p=probabilities)
 
-    # Generar puntos candidatos
-    _rs = np.random.uniform(grid[0].min(), grid[0].max(), num_candidates)
-    _phis = np.random.uniform(grid[1].min(), grid[1].max(), num_candidates)
-    _thetas = np.random.uniform(grid[2].min(), grid[2].max(), num_candidates)
+        # Convertir índices 1D a índices 3D
+        idx_theta, idx_r, idx_phi = np.unravel_index(sampled_indices, rho.shape)
 
-    # Interpolación trilineal para todos los puntos
-    interpolated_densities = trilinear_interpolation(_rs, _phis, _thetas, grid, rho)
+        idx_theta = np.clip(idx_theta, 0, len(theta) - 1)
+        idx_phi = np.clip(idx_phi, 0, len(phi) - 1)
+        
+        # Asignar coordenadas esféricas basadas en índices
+        sampled_r = r[idx_r]
+        sampled_phi = phi[idx_phi]  # Ajustar índices para phi
+        sampled_theta = theta[idx_theta]  # Ajustar índices para theta
 
-    # Filtrar puntos
-    acceptance_probability = interpolated_densities / rho.max()
-    accepted_indices = np.random.rand(num_candidates) < acceptance_probability
-
-    # Asegurarse de seleccionar exactamente Ntot partículas
-    accepted_r = _rs[accepted_indices][:Ntot]
-    accepted_phi = _phis[accepted_indices][:Ntot]
-    accepted_theta = _thetas[accepted_indices][:Ntot]
-
-    return accepted_r, accepted_phi, accepted_theta
-
-def trilinear_interpolation(point, grid, values):
-    """
-    Performs trilinear interpolation for a given point within a 3D grid.
-
-    :param point: The point (r, phi, theta) where interpolation is to be performed.
-    :param grid: Grid arrays for r, phi, and theta coordinates.
-    :param values: 3D array of values corresponding to the grid points.
-    :return: Interpolated value at the given point.
-    """
-    # Encuentra los índices de los puntos de la cuadrícula que rodean el punto de interés
-    r_idx, phi_idx, theta_idx = [
-        max(min(np.searchsorted(grid[dim], point[dim]) - 1, len(grid[dim]) - 2), 0)
-        for dim in range(3)
-    ]
-
-    # Calcula los factores de interpolación para cada dimensión
-    dr, dphi, dtheta = [
-        (point[dim] - grid[dim][idx]) / (grid[dim][idx + 1] - grid[dim][idx])
-        if grid[dim][idx + 1] > grid[dim][idx] else 0
-        for dim, idx in enumerate([r_idx, phi_idx, theta_idx])
-    ]
-
-    # Interpola la densidad
-    interpolated_value = 0
-    for i in [0, 1]:
-        for j in [0, 1]:
-            for k in [0, 1]:
-                weight = ((dr if i == 1 else 1 - dr) *
-                          (dphi if j == 1 else 1 - dphi) *
-                          (dtheta if k == 1 else 1 - dtheta))
-                interpolated_value += weight * values[theta_idx + k, r_idx + i, phi_idx + j]
-    return interpolated_value
-
-
-#revisar esta función
-def sample_particles_3d_interpolated(rho, rmed, phimed, thetamed, start_idx, end_idx):
-    """
-    Samples particles using trilinear interpolation within a specific range defined by start_idx and end_idx.
-
-    This function is suitable for parallel processing where the sampling task is divided among multiple processors.
-
-    :param rho: 3D density grid from simulation data.
-    :param rmed, phimed, thetamed: Median values for the grid coordinates.
-    :param start_idx, end_idx: Indices defining the range of particles to sample.
-    :return: Arrays of sampled r, phi, and theta coordinates for the particles in the specified range.
-    """
-    local_Ntot = end_idx - start_idx
-    rlist = np.zeros(local_Ntot)
-    philist = np.zeros(local_Ntot)
-    thetalist = np.zeros(local_Ntot)
-
-    # Crear una cuadrícula para la interpolación [aquiiii]
-    grid = [rmed, phimed, thetamed]
-
-    N = 0
-    while N < local_Ntot:
-        _r = np.random.uniform(rmed.min(), rmed.max())
-        _phi = np.random.uniform(phimed.min(), phimed.max())
-        _theta = np.random.uniform(thetamed.min(), thetamed.max())
-
-        # Punto para interpolación
-        point = [_r, _phi, _theta]
-
-        # Realizar interpolación trilineal
-        interpolated_density = trilinear_interpolation(point, grid, rho)
-
-        # Decidir si aceptar la partícula basado en la densidad interpolada
-        if np.random.rand() < interpolated_density / rho.max():
-            rlist[N] = _r
-            philist[N] = _phi
-            thetalist[N] = _theta
-            N += 1
-
-    return rlist, philist, thetalist
+        return sampled_r, sampled_phi, sampled_theta
+    except Exception as e:
+        print("Error en sample_from_density_grid:", e)
+        return None, None, None
