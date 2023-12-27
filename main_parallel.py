@@ -57,11 +57,28 @@ def process_file(file_idx, dT, params, gamma, ASPECTRATIO, alpha, beta, extrapol
         # Compute accelerations    
         accelerations = compute_acceleration_3d_partial_vectorized(positions_3d, densities, pressures, particle_mass, h_values, viscosities)
         
-        # Assign particle IDs
-        ids = np.arange(start_idx, end_idx, dtype=np.int32)
-        
+        return {
+            'dT': dT,
+            'file_idx': file_idx,
+            'Ntot_per_file': Ntot_per_file,
+            'positions_3d': positions_3d,
+            'velocities': velocities,
+            'masses': masses,
+            'particle_energies': particle_energies,
+            'densities': densities,
+            'h_values': h_values,
+            'accelerations': accelerations,
+            'pressures': pressures,
+            'viscosities': viscosities,
+            'base_filename': base_filename,
+            'total_files': total_files,
+            'unique_dir': unique_dir,
+            'start_idx': start_idx, 
+            'end_idx': end_idx
+        }
+
         # Create snapshot file
-        create_snapshot_file(dT, file_idx, Ntot_per_file, positions_3d, velocities, ids, masses, particle_energies, densities, h_values, accelerations, pressures, viscosities, base_filename, total_files, unique_dir)
+        create_snapshot_file(dT, file_idx, Ntot_per_file, positions_3d, velocities, masses, particle_energies, densities, h_values, accelerations, pressures, viscosities, base_filename, total_files, unique_dir)
 
     except Exception as e:
         print(f"Error processing file {file_idx} at time step {dT}: {e}")
@@ -120,9 +137,14 @@ def main(total_cpus, output_dir, path_outputs_fargo, total_timesteps, Ntot, alph
             tasks.append((file_idx, dT, params, gamma, ASPECTRATIO, alpha, beta, extrapolation_mode, Ntot, Ntot_per_file, rho, phi, theta, r, phimed, rmed, thetamed, vphi, vr, vtheta, u, nr, ntheta, start_idx, end_idx, unique_dir, total_files))
 
     with ProcessPoolExecutor(max_workers=total_cpus) as executor:
-        futures = [executor.submit(process_file, *task) for task in tasks]
-        with tqdm(total=len(tasks), desc='Processing files') as progress_bar:
+        # Submit tasks to the executor
+        futures = {executor.submit(process_file, *task): task for task in tasks}
+
+        # Set up tqdm bar
+        with tqdm(total=len(futures), desc='Processing files') as progress_bar:
             for future in as_completed(futures):
+                result = future.result()  # Get the result
+                create_snapshot_file(**result)
                 progress_bar.update(1)
     
 
