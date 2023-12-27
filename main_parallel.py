@@ -4,85 +4,11 @@ import os
 from multiprocessing import cpu_count, Pool
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from utils.parameters import read_parameters
-from utils.conversions import spherical_to_cartesian, velocities_to_cartesian_3d, to_cartesian
-from utils.sampling import sample_particles_3d_partial, assign_particle_velocities_from_grid_3d_partial, assign_particle_densities_from_grid_3d_partial, assign_particle_internal_energies_from_grid_3d_partial, sample_from_density_grid
-from utils.physics import compute_pressure, compute_acceleration_3d_partial, compute_artificial_viscosity_3d_partial, compute_particle_mass_3d, compute_artificial_viscosity_3d_partial_vectorized, compute_acceleration_3d_partial_vectorized
-from utils.sph_utils import compute_smoothing_length_3d
-from utils.hdf5_utils import create_snapshot_file, create_unique_directory, copy_files_to_directory
+from processing import process_file
+from utils.hdf5_utils import create_unique_directory, copy_files_to_directory
 from run_splash import run_splash
 import argparse
 from tqdm import tqdm
-
-def process_file(file_idx, dT, params, gamma, ASPECTRATIO, alpha, beta, extrapolation_mode, Ntot, Ntot_per_file, rho, phi, theta, r, phimed, rmed, thetamed, vphi, vr, vtheta, u, nr, ntheta, start_idx, end_idx, unique_dir, total_files, base_filename = 'snapshot_3d'): 
-    
-    try:
-        # Sampling the particles for the actual subset
-        if extrapolation_mode == 0:
-            rlist, philist, thetalist = sample_particles_3d_partial(rho, phi, theta, rmed, phimed, thetamed, r, start_idx, end_idx)
-            x, y, z = spherical_to_cartesian(rlist, philist, thetalist)
-        elif extrapolation_mode == 1:
-            rlist, philist, thetalist = sample_particles_by_importance(rho, r, phi, theta, start_idx, end_idx)
-            x, y, z = spherical_to_cartesian(rlist, philist, thetalist)
-        else:
-            rlist, philist, thetalist = sample_from_density_grid(rho, r, phi, theta, start_idx, end_idx)
-            x, y, z = to_cartesian(rlist, philist, thetalist)
-        
-        #print("rlist.shape: ", rlist.shape)
-        # Convert spherical coordinates to Cartesian coordinates
-        positions_3d = np.column_stack((x, y, z))
-        
-        # Convert velocity components from spherical to Cartesian coordinates
-        vrlist, vphilist, vthetalist = assign_particle_velocities_from_grid_3d_partial(vphi, vr, vtheta, rlist, philist, thetalist, rmed, phimed, thetamed, start_idx, end_idx)
-        vx, vy, vz = velocities_to_cartesian_3d(vrlist, vphilist, vthetalist, rlist, philist, thetalist)
-        velocities = np.column_stack((vx, vy, vz))
-        
-        # Assign densities and internal energies to particles
-        densities = assign_particle_densities_from_grid_3d_partial(rho, rlist, philist, thetalist, rmed, phimed, thetamed, start_idx, end_idx)
-        particle_energies = assign_particle_internal_energies_from_grid_3d_partial(rlist, philist, thetalist, u, rmed, phimed, thetamed, start_idx, end_idx)
-
-
-        # Compute particle masses
-        particle_mass = compute_particle_mass_3d(nr, ntheta, rho, ASPECTRATIO, params, Ntot)
-        masses = np.full(Ntot_per_file, particle_mass, dtype=np.float32)
-
-        # Compute particle pressures     
-        pressures = compute_pressure(densities, particle_energies, gamma)
-        
-        # Compute smoothing lengths
-        h_values = compute_smoothing_length_3d(masses, densities)
-        
-        # Compute viscosities
-        viscosities = compute_artificial_viscosity_3d_partial_vectorized(positions_3d, vx, vy, vz, densities, particle_energies, h_values, alpha, beta)
-
-        # Compute accelerations    
-        accelerations = compute_acceleration_3d_partial_vectorized(positions_3d, densities, pressures, particle_mass, h_values, viscosities)
-        
-        return {
-            'dT': dT,
-            'file_idx': file_idx,
-            'Ntot_per_file': Ntot_per_file,
-            'positions_3d': positions_3d,
-            'velocities': velocities,
-            'masses': masses,
-            'particle_energies': particle_energies,
-            'densities': densities,
-            'h_values': h_values,
-            'accelerations': accelerations,
-            'pressures': pressures,
-            'viscosities': viscosities,
-            'base_filename': base_filename,
-            'total_files': total_files,
-            'unique_dir': unique_dir,
-            'start_idx': start_idx, 
-            'end_idx': end_idx
-        }
-
-        # Create snapshot file
-        create_snapshot_file(dT, file_idx, Ntot_per_file, positions_3d, velocities, masses, particle_energies, densities, h_values, accelerations, pressures, viscosities, base_filename, total_files, unique_dir)
-
-    except Exception as e:
-        print(f"Error processing file {file_idx} at time step {dT}: {e}")
-        raise e
 
 def main(total_cpus, output_dir, path_outputs_fargo, total_timesteps, Ntot, alpha, beta, extrapolation_mode, total_files):
     dT=str(0)
@@ -137,14 +63,9 @@ def main(total_cpus, output_dir, path_outputs_fargo, total_timesteps, Ntot, alph
             tasks.append((file_idx, dT, params, gamma, ASPECTRATIO, alpha, beta, extrapolation_mode, Ntot, Ntot_per_file, rho, phi, theta, r, phimed, rmed, thetamed, vphi, vr, vtheta, u, nr, ntheta, start_idx, end_idx, unique_dir, total_files))
 
     with ProcessPoolExecutor(max_workers=total_cpus) as executor:
-        # Submit tasks to the executor
-        futures = {executor.submit(process_file, *task): task for task in tasks}
-
-        # Set up tqdm bar
-        with tqdm(total=len(futures), desc='Processing files') as progress_bar:
+        futures = [executor.submit(process_file, *task) for task in tasks]
+        with tqdm(total=len(tasks), desc='Processing files') as progress_bar:
             for future in as_completed(futures):
-                result = future.result()  # Get the result
-                create_snapshot_file(**result)
                 progress_bar.update(1)
     
 
@@ -171,7 +92,7 @@ if __name__ == '__main__':
     parser.add_argument('-o', '--output', type=str, default='outputs/snapshot', help='Output directory for the generated HDF5 files.')
     
     # Directory containing FARGO3D output files
-    parser.add_argument('-of', '--output_fargo', type=str, default='../FARGO3D/public/outputs/p3disof/', help='Directory containing FARGO3D output files.')
+    parser.add_argument('-of', '--output_fargo', type=str, default='../public/outputs/p3disof/', help='Directory containing FARGO3D output files.')
     
     # Number of time steps to process
     parser.add_argument('-t', '--times', type=int, default=1, help='Number of time steps to process.')

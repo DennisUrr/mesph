@@ -19,7 +19,7 @@ def create_unique_directory(base_path):
     os.makedirs(new_path)
     return new_path
 
-def create_snapshot_file(dT, file_idx, Ntot, positions_3d, velocities, ids, masses, particle_energies, densities, h_values, accelerations, pressures, viscosities, base_filename, total_files, unique_dir, start_idx, end_idx):
+def create_snapshot_file(dT, file_idx, Ntot, positions_3d, velocities, masses, particle_energies, densities, h_values, accelerations, pressures, viscosities, base_filename, total_files, unique_dir, start_idx, end_idx):
     """
     Creates a snapshot file for a specific time and file index with particle data in HDF5 format.
 
