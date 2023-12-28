@@ -84,7 +84,7 @@ def main(total_cpus, output_dir, path_outputs_fargo, total_timesteps, Ntot, alph
                 start_idx = file_idx * Ntot_per_file
                 end_idx = start_idx + Ntot_per_file if file_idx != total_files - 1 else Ntot
                 # Add a task for each file
-                tasks.append((file_idx, dT, params, gamma, ASPECTRATIO, alpha, beta, extrapolation_mode, Ntot, Ntot_per_file, rho, phi, theta, r, phimed, rmed, thetamed, vphi, vr, vtheta, u, nr, ntheta, start_idx, end_idx, unique_dir, total_files))
+                tasks.append((file_idx, dT-dT_initial, params, gamma, ASPECTRATIO, alpha, beta, extrapolation_mode, Ntot, Ntot_per_file, rho, phi, theta, r, phimed, rmed, thetamed, vphi, vr, vtheta, u, nr, ntheta, start_idx, end_idx, unique_dir, total_files))
         total_timesteps = total_timesteps - dT_initial
     else:
         
@@ -107,9 +107,9 @@ def main(total_cpus, output_dir, path_outputs_fargo, total_timesteps, Ntot, alph
                 start_idx = file_idx * Ntot_per_file
                 end_idx = start_idx + Ntot_per_file if file_idx != total_files - 1 else Ntot
                 # Add a task for each file
-                tasks.append((file_idx, dT, params, gamma, ASPECTRATIO, alpha, beta, extrapolation_mode, Ntot, Ntot_per_file, rho, phi, theta, r, phimed, rmed, thetamed, vphi, vr, vtheta, u, nr, ntheta, start_idx, end_idx, unique_dir, total_files))
+                tasks.append((file_idx, str(int(dT)-dT_initial), params, gamma, ASPECTRATIO, alpha, beta, extrapolation_mode, Ntot, Ntot_per_file, rho, phi, theta, r, phimed, rmed, thetamed, vphi, vr, vtheta, u, nr, ntheta, start_idx, end_idx, unique_dir, total_files))
         total_timesteps = dT_final - dT_initial
-        
+
     with ProcessPoolExecutor(max_workers=total_cpus) as executor:
         futures = [executor.submit(process_file, *task) for task in tasks]
         with tqdm(total=len(tasks), desc='Processing files') as progress_bar:
