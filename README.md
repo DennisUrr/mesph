@@ -16,7 +16,10 @@ The script `main_parallel.py` can be executed with several optional arguments to
 - `-a` / `--alpha`: Alpha parameter for artificial viscosity. Defaults to 0.6.
 - `-b` / `--beta`: Beta parameter for artificial viscosity. Defaults to 1.
 - `-tf` / `--total_files`: Number of files per snapshot. Defaults to 2.
-
+- `-m` / `--mode`: Mode: 0 = 0 -> t, 1 = t_initial -> t, 2 = t_initial -> t_final. Defaults to 0.
+- `-dti` / `--dT_initial`: Initial time step to process. Defaults to None.
+- `-dtf` / `--dT_final`: Final time step to process. Defaults to None.
+  
 ### Running the Script
 
 For instance, if you have 20 Fargo output files (like `domain.dat`, `gasdens{n}.dat`, `gasv{n}.dat`, `gasenergy{n}.dat`) and you want to use 8 processors, the script will generate 20*8 output files.
