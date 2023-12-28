@@ -64,7 +64,8 @@ def main(total_cpus, output_dir, path_outputs_fargo, total_timesteps, Ntot, alph
                 tasks.append((file_idx, dT, params, gamma, ASPECTRATIO, alpha, beta, extrapolation_mode, Ntot, Ntot_per_file, rho, phi, theta, r, phimed, rmed, thetamed, vphi, vr, vtheta, u, nr, ntheta, start_idx, end_idx, unique_dir, total_files))
     
     elif dT_final == None:
-        for dT in range(dT_initial-1, total_timesteps):
+        
+        for dT in range(dT_initial, total_timesteps):
             dT = str(dT)
 
             # load the gas density
@@ -84,7 +85,9 @@ def main(total_cpus, output_dir, path_outputs_fargo, total_timesteps, Ntot, alph
                 end_idx = start_idx + Ntot_per_file if file_idx != total_files - 1 else Ntot
                 # Add a task for each file
                 tasks.append((file_idx, dT, params, gamma, ASPECTRATIO, alpha, beta, extrapolation_mode, Ntot, Ntot_per_file, rho, phi, theta, r, phimed, rmed, thetamed, vphi, vr, vtheta, u, nr, ntheta, start_idx, end_idx, unique_dir, total_files))
+        total_timesteps = total_timesteps - dT_initial
     else:
+        
         for dT in range(dT_initial, dT_final+1):
             dT = str(dT)
 
@@ -105,7 +108,8 @@ def main(total_cpus, output_dir, path_outputs_fargo, total_timesteps, Ntot, alph
                 end_idx = start_idx + Ntot_per_file if file_idx != total_files - 1 else Ntot
                 # Add a task for each file
                 tasks.append((file_idx, dT, params, gamma, ASPECTRATIO, alpha, beta, extrapolation_mode, Ntot, Ntot_per_file, rho, phi, theta, r, phimed, rmed, thetamed, vphi, vr, vtheta, u, nr, ntheta, start_idx, end_idx, unique_dir, total_files))
-    
+        total_timesteps = dT_final - dT_initial
+        
     with ProcessPoolExecutor(max_workers=total_cpus) as executor:
         futures = [executor.submit(process_file, *task) for task in tasks]
         with tqdm(total=len(tasks), desc='Processing files') as progress_bar:
@@ -119,7 +123,7 @@ def main(total_cpus, output_dir, path_outputs_fargo, total_timesteps, Ntot, alph
         print(f"El directorio {destination_directory} no existe.")
 
     copy_files_to_directory(source_files, destination_directory)
-    run_splash(total_timesteps, unique_dir, dT_initial, dT_final)
+    run_splash(total_timesteps, unique_dir)
 
 if __name__ == '__main__':
     init_time = time.time()
