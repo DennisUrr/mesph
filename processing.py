@@ -13,7 +13,7 @@ def process_file(file_idx, dT, params, gamma, ASPECTRATIO, alpha, beta, extrapol
             rlist, philist, thetalist = sample_particles_3d_partial(rho, phi, theta, rmed, phimed, thetamed, r, start_idx, end_idx)
             x, y, z = spherical_to_cartesian(rlist, philist, thetalist)
         elif extrapolation_mode == 1:
-            rlist, philist, thetalist = sample_particles_by_importance(rho, r, phi, theta, start_idx, end_idx)
+            rlist, philist, thetalist = sample_particles_3d_partial(rho, r, phi, theta, start_idx, end_idx)
             x, y, z = spherical_to_cartesian(rlist, philist, thetalist)
         else:
             rlist, philist, thetalist = sample_from_density_grid(rho, r, phi, theta, start_idx, end_idx)
