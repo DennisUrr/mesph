@@ -2,7 +2,7 @@ import numpy as np
 
 from utils.conversions import spherical_to_cartesian, velocities_to_cartesian_3d, to_cartesian
 from utils.sampling import sample_particles_3d_partial, assign_particle_velocities_from_grid_3d_partial, assign_particle_densities_from_grid_3d_partial, assign_particle_internal_energies_from_grid_3d_partial, sample_from_density_grid
-from utils.physics import compute_pressure, compute_particle_mass_3d, compute_artificial_viscosity_3d_partial_vectorized, compute_acceleration_3d_partial_vectorized
+from utils.physics import compute_pressure, compute_particle_mass_3d, compute_artificial_viscosity_3d_partial_vectorized, compute_acceleration_3d_partial_vectorized, compute_artificial_viscosity_3d_partial, compute_acceleration_3d_partial
 from utils.sph_utils import compute_smoothing_length_3d
 from utils.hdf5_utils import create_snapshot_file
 
@@ -11,10 +11,10 @@ def process_file(file_idx, dT, params, gamma, ASPECTRATIO, alpha, beta, extrapol
         # Sampling the particles for the actual subset
         if extrapolation_mode == 0:
             rlist, philist, thetalist = sample_particles_3d_partial(rho, phi, theta, rmed, phimed, thetamed, r, start_idx, end_idx)
-            x, y, z = spherical_to_cartesian(rlist, philist, thetalist)
+            x, y, z = to_cartesian(rlist, philist, thetalist)
         elif extrapolation_mode == 1:
             rlist, philist, thetalist = sample_particles_3d_partial(rho, r, phi, theta, start_idx, end_idx)
-            x, y, z = spherical_to_cartesian(rlist, philist, thetalist)
+            x, y, z = to_cartesian(rlist, philist, thetalist)
         else:
             rlist, philist, thetalist = sample_from_density_grid(rho, r, phi, theta, start_idx, end_idx)
             x, y, z = to_cartesian(rlist, philist, thetalist)
@@ -44,13 +44,16 @@ def process_file(file_idx, dT, params, gamma, ASPECTRATIO, alpha, beta, extrapol
         h_values = compute_smoothing_length_3d(masses, densities)
         
         # Compute viscosities
-        viscosities = compute_artificial_viscosity_3d_partial_vectorized(positions_3d, vx, vy, vz, densities, particle_energies, h_values, alpha, beta)
+        #viscosities = compute_artificial_viscosity_3d_partial_vectorized(positions_3d, vx, vy, vz, densities, particle_energies, h_values, alpha, beta)
+        viscosities = compute_artificial_viscosity_3d_partial(positions_3d, vx, vy, vz, densities, particle_energies, h_values, alpha, beta)
+
 
         # Compute accelerations    
-        accelerations = compute_acceleration_3d_partial_vectorized(positions_3d, densities, pressures, particle_mass, h_values, viscosities)
-        
+        #accelerations = compute_acceleration_3d_partial_vectorized(positions_3d, densities, pressures, particle_mass, h_values, viscosities)
+        accelerations = compute_acceleration_3d_partial(positions_3d, densities, pressures, particle_mass, h_values, viscosities)
+
         # Create snapshot file
-        create_snapshot_file(dT, file_idx, Ntot, positions_3d, velocities, masses, particle_energies, densities, h_values, accelerations, pressures, viscosities, base_filename, total_files, unique_dir, start_idx, end_idx)
+        create_snapshot_file(dT, file_idx, Ntot_per_file, positions_3d, velocities, masses, particle_energies, densities, h_values, accelerations, pressures, viscosities, base_filename, total_files, unique_dir, start_idx, end_idx)
 
     except Exception as e:
         print(f"Error processing file {file_idx} at time step {dT}: {e}")

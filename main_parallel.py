@@ -65,7 +65,7 @@ def main(total_cpus, output_dir, path_outputs_fargo, total_timesteps, Ntot, alph
     
     elif dT_final == None:
         
-        for dT in range(dT_initial, total_timesteps):
+        for dT in range(dT_initial, dT_initial+total_timesteps):
             dT = str(dT)
 
             # load the gas density
@@ -84,8 +84,7 @@ def main(total_cpus, output_dir, path_outputs_fargo, total_timesteps, Ntot, alph
                 start_idx = file_idx * Ntot_per_file
                 end_idx = start_idx + Ntot_per_file if file_idx != total_files - 1 else Ntot
                 # Add a task for each file
-                tasks.append((file_idx, dT-dT_initial, params, gamma, ASPECTRATIO, alpha, beta, extrapolation_mode, Ntot, Ntot_per_file, rho, phi, theta, r, phimed, rmed, thetamed, vphi, vr, vtheta, u, nr, ntheta, start_idx, end_idx, unique_dir, total_files))
-        total_timesteps = total_timesteps - dT_initial
+                tasks.append((file_idx, str(int(dT)-dT_initial), params, gamma, ASPECTRATIO, alpha, beta, extrapolation_mode, Ntot, Ntot_per_file, rho, phi, theta, r, phimed, rmed, thetamed, vphi, vr, vtheta, u, nr, ntheta, start_idx, end_idx, unique_dir, total_files))
     else:
         
         for dT in range(dT_initial, dT_final+1):
@@ -108,14 +107,17 @@ def main(total_cpus, output_dir, path_outputs_fargo, total_timesteps, Ntot, alph
                 end_idx = start_idx + Ntot_per_file if file_idx != total_files - 1 else Ntot
                 # Add a task for each file
                 tasks.append((file_idx, str(int(dT)-dT_initial), params, gamma, ASPECTRATIO, alpha, beta, extrapolation_mode, Ntot, Ntot_per_file, rho, phi, theta, r, phimed, rmed, thetamed, vphi, vr, vtheta, u, nr, ntheta, start_idx, end_idx, unique_dir, total_files))
-        total_timesteps = dT_final - dT_initial
+        #total_timesteps = dT_final - dT_initial + 1
+
 
     with ProcessPoolExecutor(max_workers=total_cpus) as executor:
         futures = [executor.submit(process_file, *task) for task in tasks]
         with tqdm(total=len(tasks), desc='Processing files') as progress_bar:
             for future in as_completed(futures):
                 progress_bar.update(1)
-    
+
+
+
 
     source_files = ['outputs/splash.defaults', 'outputs/splash.limits']
     destination_directory = unique_dir
@@ -175,12 +177,13 @@ if __name__ == '__main__':
     beta = args.beta
     extrapolation_mode = args.extrapolation
     total_files = int(args.total_files)
-    dT_initial = int(args.dT_initial)
-    dT_final = int(args.dT_final)
-    mode = int(args.mode)
+    dT_initial = args.dT_initial
+    dT_final = args.dT_final
+    mode = args.mode
 
     # print(f"Total CPUs: {total_cpus}")
     # print(f"total_files: {total_files}")
+
     if mode == 0:
         dT_initial = None
         dT_final = None

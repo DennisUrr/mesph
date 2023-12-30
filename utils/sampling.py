@@ -1,7 +1,8 @@
 import numpy as np
+import numba
 
 from utils.conversions import spherical_to_cartesian, to_cartesian
-
+@numba.jit
 def sample_particles_3d_partial(rho, phi, theta, rmed, phimed, thetamed, r, start_idx, end_idx):
     """
     Samples a subset of particles from 'start_idx' to 'end_idx' using a rejection sampling method
