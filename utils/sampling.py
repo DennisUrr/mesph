@@ -1,8 +1,7 @@
 import numpy as np
-import numba
-
+from scipy.interpolate import RegularGridInterpolator
 from utils.conversions import spherical_to_cartesian, to_cartesian
-@numba.jit
+
 def sample_particles_3d_partial(rho, phi, theta, rmed, phimed, thetamed, r, start_idx, end_idx):
     """
     Samples a subset of particles from 'start_idx' to 'end_idx' using a rejection sampling method
@@ -147,31 +146,31 @@ def assign_particle_internal_energies_from_grid_3d_partial(rlist, philist, theta
 ######                                      SAMPLING TRILINEAL                                      ########
 ############################################################################################################
 
-def sample_from_density_grid(rho, r, phi, theta, start_idx, end_idx):
-    try:
-        num_particles = end_idx - start_idx
-        
-        # Aplanar rho para obtener un array 1D
-        rho_flat = rho.flatten()
+def trilinear_interpolation_spherical(rho, r, phi, theta, points):
+    """
+    Realiza una interpolación trilineal en un grid regular en coordenadas esféricas.
 
-        # Generar probabilidades a partir de rho
-        probabilities = rho_flat / np.sum(rho_flat)
+    :param rho: Grid 3D de densidades.
+    :param r: Array 1D de valores radiales.
+    :param phi: Array 1D de valores azimutales.
+    :param theta: Array 1D de valores polares.
+    :param points: Puntos donde se desea interpolar. Cada punto debe estar en formato (r, phi, theta).
+    :return: Valores interpolados en los puntos dados.
+    """
 
-        # Generar índices de muestreo basados en estas probabilidades
-        sampled_indices = np.random.choice(len(rho_flat), size=num_particles, p=probabilities)
+    # Ajusta el eje polar
+    theta_adjusted = np.pi/2 - theta
 
-        # Convertir índices 1D a índices 3D
-        idx_theta, idx_r, idx_phi = np.unravel_index(sampled_indices, rho.shape)
+    # Crea un interpolador
+    interpolator = RegularGridInterpolator((r, phi, theta_adjusted), rho)
 
-        idx_theta = np.clip(idx_theta, 0, len(theta) - 1)
-        idx_phi = np.clip(idx_phi, 0, len(phi) - 1)
-        
-        # Asignar coordenadas esféricas basadas en índices
-        sampled_r = r[idx_r]
-        sampled_phi = phi[idx_phi]  # Ajustar índices para phi
-        sampled_theta = theta[idx_theta]  # Ajustar índices para theta
+    # Ajusta los puntos para la interpolación
+    points_adjusted = np.array([(p[0], p[1], np.pi/2 - p[2]) for p in points])
 
-        return sampled_r, sampled_phi, sampled_theta
-    except Exception as e:
-        print("Error en sample_from_density_grid:", e)
-        return None, None, None
+    # Realiza la interpolación
+    return interpolator(points_adjusted)
+
+# Ejemplo de uso
+# Asumiendo que rho, r, phi y theta están definidos apropiadamente
+points_to_interpolate = [(r_val, phi_val, theta_val), ...]  # reemplaza con tus puntos
+interpolated_values = trilinear_interpolation_spherical(rho, r, phi, theta, points_to_interpolate)
