@@ -1,6 +1,6 @@
 import numpy as np
 from scipy.interpolate import RegularGridInterpolator
-from utils.conversions import spherical_to_cartesian, to_cartesian
+import numba
 
 def sample_particles_3d_partial(rho, phi, theta, rmed, phimed, thetamed, r, start_idx, end_idx):
     """
@@ -157,20 +157,75 @@ def trilinear_interpolation_spherical(rho, r, phi, theta, points):
     :param points: Puntos donde se desea interpolar. Cada punto debe estar en formato (r, phi, theta).
     :return: Valores interpolados en los puntos dados.
     """
+    try:
+        # Convertir rho a escala logarítmica
+        rho_log = np.log10(rho)
 
-    # Ajusta el eje polar
-    theta_adjusted = np.pi/2 - theta
+        # Crea un interpolador en escala logarítmica
+        interpolator = RegularGridInterpolator((theta, r, phi), rho_log)
 
-    # Crea un interpolador
-    interpolator = RegularGridInterpolator((r, phi, theta_adjusted), rho)
+        # Ajusta los puntos para la interpolación
+        points_adjusted = np.array([(_theta, _r, _phi) for _theta, _r, _phi in points])
 
-    # Ajusta los puntos para la interpolación
-    points_adjusted = np.array([(p[0], p[1], np.pi/2 - p[2]) for p in points])
+        # Realiza la interpolación en escala logarítmica
+        interpolated_log_density = interpolator(points_adjusted)
 
-    # Realiza la interpolación
-    return interpolator(points_adjusted)
+        # Convierte de vuelta a la escala original
+        return 10**interpolated_log_density
+    except Exception as e:
+        print(f"Error interpolating: {e}")
+        raise e
 
-# Ejemplo de uso
-# Asumiendo que rho, r, phi y theta están definidos apropiadamente
-points_to_interpolate = [(r_val, phi_val, theta_val), ...]  # reemplaza con tus puntos
-interpolated_values = trilinear_interpolation_spherical(rho, r, phi, theta, points_to_interpolate)
+
+@numba.njit
+def sample_particles_3d_trilineal_partial(rho, phi, theta, r, start_idx, end_idx):
+
+    """
+    Samples a subset of particles from 'start_idx' to 'end_idx' using a rejection sampling method
+    based on the local density distribution from a 3D grid.
+
+    This function is designed to be used in a parallel processing context where the sampling
+    of particles is distributed across multiple processes.
+
+    :param rho: 3D density grid from simulation data.
+    :param phi, theta: Angular coordinates from the simulation grid.
+    :param rmed, phimed, thetamed: Median values of the radial, azimuthal, and polar angles.
+    :param r: Radial coordinate array.
+    :param start_idx, end_idx: Start and end indices for particle sampling in this subset.
+    :return: Arrays of sampled r, phi, and theta values for the particles.
+    """
+    try:
+        local_Ntot = end_idx - start_idx
+
+        philist = np.zeros(local_Ntot)
+        rlist = np.zeros(local_Ntot)
+        thetalist = np.zeros(local_Ntot)
+
+        N = start_idx
+        while N < end_idx:
+            #print(theta.max(), theta[-2], theta[-1])
+            _phi = np.random.uniform(phi.min(), phi[-2])
+            _r = np.random.uniform(r.min(), r.max())
+            _theta = np.random.uniform(theta.min(), theta[-2])
+            #print(f"Random point: ({_phi}, {_r}, {_theta})")
+            # Calcula la densidad interpolada en el punto seleccionado
+            interpolated_density = trilinear_interpolation_spherical(rho, r, phi[:-1], theta[:-1], [(_theta, _r, _phi)])
+            #print(f"Interpolated density: {interpolated_density}")
+            #print(type(interpolated_density))
+            # Decide si aceptar o rechazar la muestra basada en la densidad interpolada
+            _w = np.random.rand()
+            #_w = np.log10(np.random.rand())
+
+            #print(f"Random number: {_w}")
+            #print(f"Interpolated density: {interpolated_density[0]}")
+            if _w < interpolated_density[0]:
+                #print("Sample accepted.")
+                philist[N - start_idx] = _phi
+                rlist[N - start_idx] = _r
+                thetalist[N - start_idx] = _theta
+                N += 1
+
+        return rlist, philist, thetalist
+    except Exception as e:
+        print(f"Error sampling particles: {e}")
+        raise e
