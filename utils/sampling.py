@@ -2,6 +2,7 @@ import numpy as np
 from scipy.interpolate import RegularGridInterpolator
 import numba
 
+@numba.njit
 def sample_particles_3d_partial(rho, phi, theta, rmed, phimed, thetamed, r, start_idx, end_idx):
     """
     Samples a subset of particles from 'start_idx' to 'end_idx' using a rejection sampling method
@@ -207,17 +208,12 @@ def sample_particles_3d_trilineal_partial(rho, phi, theta, r, start_idx, end_idx
             _phi = np.random.uniform(phi.min(), phi[-2])
             _r = np.random.uniform(r.min(), r.max())
             _theta = np.random.uniform(theta.min(), theta[-2])
-            #print(f"Random point: ({_phi}, {_r}, {_theta})")
+
             # Calcula la densidad interpolada en el punto seleccionado
             interpolated_density = trilinear_interpolation_spherical(rho, r, phi[:-1], theta[:-1], [(_theta, _r, _phi)])
-            #print(f"Interpolated density: {interpolated_density}")
-            #print(type(interpolated_density))
             # Decide si aceptar o rechazar la muestra basada en la densidad interpolada
             _w = np.random.rand()
-            #_w = np.log10(np.random.rand())
 
-            #print(f"Random number: {_w}")
-            #print(f"Interpolated density: {interpolated_density[0]}")
             if _w < interpolated_density[0]:
                 #print("Sample accepted.")
                 philist[N - start_idx] = _phi
@@ -229,3 +225,44 @@ def sample_particles_3d_trilineal_partial(rho, phi, theta, r, start_idx, end_idx
     except Exception as e:
         print(f"Error sampling particles: {e}")
         raise e
+    
+@numba.njit
+def sample_particles_3d_partial_1(rho, phi, theta, rmed, phimed, thetamed, r, start_idx, end_idx):
+
+    local_Ntot = end_idx - start_idx
+
+    # Crear una matriz de probabilidad 3D
+    P_3D = rho / rho.sum()
+
+    philist = np.zeros(local_Ntot)
+    rlist = np.zeros(local_Ntot)
+    thetalist = np.zeros(local_Ntot)
+
+    phi_area = (phi.max() - phi.min()) / (len(phi) - 1)
+    r_area = (r.max() - r.min()) / (len(r) - 4)  # ajuste debido a [3:-4] al cargar 'r'
+    theta_area = (theta.max() - theta.min()) / (len(theta) - 1)
+
+    
+
+    N = start_idx
+    while N < end_idx:
+        _phi = np.random.uniform(phi.min(), phi.max())
+        _r = np.random.uniform(r.min(), r.max())
+        _theta = np.random.uniform(theta.min(), theta.max())
+
+        
+        iphi = min(int((_phi - phi.min()) / phi_area), len(phimed) - 1)
+        ir = min(int((_r - r.min()) / r_area), len(rmed) - 1)
+        itheta = min(int((_theta - theta.min()) / theta_area), len(thetamed) - 1)
+
+        _w = np.random.rand()
+
+        # Muestreo basado en la probabilidad 3D
+        if _w < P_3D[itheta, ir, iphi]:
+            #print("Sample accepted.")
+            philist[N - start_idx] = _phi
+            rlist[N - start_idx] = _r
+            thetalist[N - start_idx] = _theta
+            N += 1
+
+    return rlist, philist, thetalist
