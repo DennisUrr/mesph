@@ -1,7 +1,7 @@
 import numpy as np
-
+import traceback
 from utils.conversions import spherical_to_cartesian, velocities_to_cartesian_3d, to_cartesian
-from utils.sampling import sample_particles_3d_partial, assign_particle_velocities_from_grid_3d_partial, assign_particle_densities_from_grid_3d_partial, assign_particle_internal_energies_from_grid_3d_partial, sample_from_density_grid
+from utils.sampling import sample_particles_3d_partial, assign_particle_velocities_from_grid_3d_partial, assign_particle_densities_from_grid_3d_partial, assign_particle_internal_energies_from_grid_3d_partial, sample_particles_3d_trilineal_partial, sample_particles_3d_partial_1
 from utils.physics import compute_pressure, compute_particle_mass_3d, compute_artificial_viscosity_3d_partial_vectorized, compute_acceleration_3d_partial_vectorized, compute_artificial_viscosity_3d_partial, compute_acceleration_3d_partial
 from utils.sph_utils import compute_smoothing_length_3d
 from utils.hdf5_utils import create_snapshot_file
@@ -13,10 +13,10 @@ def process_file(file_idx, dT, params, gamma, ASPECTRATIO, alpha, beta, extrapol
             rlist, philist, thetalist = sample_particles_3d_partial(rho, phi, theta, rmed, phimed, thetamed, r, start_idx, end_idx)
             x, y, z = to_cartesian(rlist, philist, thetalist)
         elif extrapolation_mode == 1:
-            rlist, philist, thetalist = sample_particles_3d_partial(rho, r, phi, theta, start_idx, end_idx)
+            rlist, philist, thetalist = sample_particles_3d_trilineal_partial(rho, phi, theta, r, start_idx, end_idx)
             x, y, z = to_cartesian(rlist, philist, thetalist)
         else:
-            rlist, philist, thetalist = sample_from_density_grid(rho, r, phi, theta, start_idx, end_idx)
+            rlist, philist, thetalist = sample_particles_3d_partial_1(rho, phi, theta, rmed, phimed, thetamed, r, start_idx, end_idx)
             x, y, z = to_cartesian(rlist, philist, thetalist)
         
         #print("rlist.shape: ", rlist.shape)
@@ -57,4 +57,5 @@ def process_file(file_idx, dT, params, gamma, ASPECTRATIO, alpha, beta, extrapol
 
     except Exception as e:
         print(f"Error processing file {file_idx} at time step {dT}: {e}")
+        traceback.print_exc()
         raise e

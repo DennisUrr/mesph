@@ -100,3 +100,4 @@ def compute_smoothing_length_3d(masses, densities, eta=1.2, dimension=3):
     smoothing_lengths = eta * np.power(volumes, ((1.0 / dimension)))
     
     return smoothing_lengths
+
