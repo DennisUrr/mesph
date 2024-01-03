@@ -2,6 +2,7 @@ import h5py
 import os
 import shutil
 from math import pi
+import numpy as np
 
 def create_unique_directory(base_path):
     """
@@ -18,7 +19,7 @@ def create_unique_directory(base_path):
     os.makedirs(new_path)
     return new_path
 
-def create_snapshot_file(dT, file_idx, Ntot, positions_3d, velocities, ids, masses, particle_energies, densities, h_values, accelerations, pressures, viscosities, base_filename, total_files, unique_dir):
+def create_snapshot_file(dT, file_idx, Ntot, positions_3d, velocities, masses, particle_energies, densities, h_values, accelerations, pressures, viscosities, base_filename, total_files, unique_dir, start_idx, end_idx):
     """
     Creates a snapshot file for a specific time and file index with particle data in HDF5 format.
 
@@ -32,6 +33,8 @@ def create_snapshot_file(dT, file_idx, Ntot, positions_3d, velocities, ids, mass
 
     The function creates a snapshot file named with the time step and file index, containing all the provided particle properties.
     """
+    # Assign particle IDs
+    ids = np.arange(start_idx, end_idx, dtype=np.int32)
     # Define the full filename with the path to the unique directory
     filename = os.path.join(unique_dir, f'{base_filename}_{int(dT):03d}.{file_idx}.hdf5')
 
@@ -48,7 +51,7 @@ def create_snapshot_file(dT, file_idx, Ntot, positions_3d, velocities, ids, mass
         header.attrs["Dimension"] = 3
 
         # Create the PartType0 group and add datasets
-        pt0 = f.create_group("/PartType0")
+        pt0 = f.create_group("/PartType0") # GAS
         pt0.create_dataset("Coordinates", data=positions_3d)
         pt0.create_dataset("Velocities", data=velocities)
         pt0.create_dataset("ParticleIDs", data=ids)
@@ -59,9 +62,9 @@ def create_snapshot_file(dT, file_idx, Ntot, positions_3d, velocities, ids, mass
         pt0.create_dataset("Acceleration", data=accelerations)
         pt0.create_dataset("Pressure", data=pressures)
         pt0.create_dataset("Viscosity", data=viscosities)
-        
-    #print("==============================================================\n", "========= HDF5 File "+ str(dT) +"."+ str(file_idx) +" Created. =========\n", "==============================================================")
 
+    #print("==============================================================\n", "========= HDF5 File "+ str(dT) +"."+ str(file_idx) +" Created. =========\n", "==============================================================")
+    #print(dT, '.' ,file_idx, " Created.")
 
 def copy_files_to_directory(source_files, destination_directory):
     """

@@ -13,7 +13,8 @@ def gaussian_kernel(r, h):
     norm = 1 / (np.pi**(3/2) * h**3)
     return norm * np.exp(-r**2 / h**2)
 
-def gradient_gaussian_kernel(r, h):
+
+def gradient_gaussian_kernel_vectorized(r, h):
     """
     Calculates the gradient of the Gaussian kernel function for SPH at a given distance r and smoothing length h.
 
@@ -36,7 +37,38 @@ def gradient_gaussian_kernel(r, h):
     return result
 
 
-def compute_smoothing_length_3d(masses, densities, eta=1.2, dimension=3):
+def gradient_gaussian_kernel(r, h):
+    """
+    Calculates the gradient of the Gaussian kernel function for SPH at a given distance r and smoothing length h.
+    This version handles both scalar and numpy array inputs for r.
+
+    :param r: Distance from the particle (scalar or numpy array).
+    :param h: Smoothing length (scalar).
+    :return: Gradient of the Gaussian kernel (scalar or numpy array).
+    """
+    # Si r es un escalar, realiza el cálculo directamente
+    if np.isscalar(r):
+        if np.isfinite(r):
+            prefactor = -3 * r / (h**3 * np.sqrt(np.pi))
+            exponential_part = np.exp(-r**2 / h**2)
+            return prefactor * exponential_part
+        return 0.0
+
+    # Si r es un array, inicializa un array de resultados y realiza el cálculo para cada elemento
+    result = np.zeros_like(r)
+    for i in range(len(r)):
+        if np.isfinite(r[i]):
+            prefactor = -3 * r[i] / (h**3 * np.sqrt(np.pi))
+            exponential_part = np.exp(-r[i]**2 / h**2)
+            result[i] = prefactor * exponential_part
+
+    return result
+
+
+
+
+def compute_smoothing_length_density_based(masses, densities, eta=1.2, dimension=3):
+    
     """
     Computes the adaptive smoothing length in 3D based on local density for SPH simulations.
 
@@ -68,3 +100,67 @@ def compute_smoothing_length_3d(masses, densities, eta=1.2, dimension=3):
     smoothing_lengths = eta * np.power(volumes, ((1.0 / dimension)))
     
     return smoothing_lengths
+
+def compute_adaptive_smoothing_length_adaptative(positions, densities, min_neighbors=20, max_neighbors=100):
+    try:
+        num_particles = positions.shape[0]
+        smoothing_lengths = np.zeros(num_particles)
+        density_mean = np.mean(densities)
+
+        for i in range(num_particles):
+
+            # Calcular un factor de escala basado en la densidad
+            density_scale = densities[i] / density_mean
+
+            # Ajustar el número de vecinos en función de la densidad
+            desired_neighbors = int(np.clip(min_neighbors + (max_neighbors - min_neighbors) * density_scale, min_neighbors, max_neighbors))
+
+            # Estimar el smoothing length (esta es una estimación simplificada, se puede mejorar)
+            h = estimate_smoothing_length(positions[i], positions, desired_neighbors)
+            smoothing_lengths[i] = h
+
+        return smoothing_lengths
+    except Exception as e:
+        print("Error in compute_adaptive_smoothing_length_adaptative: ", e)
+        return None
+
+def estimate_smoothing_length(particle_position, positions, desired_neighbors):
+    try:
+        # Calcula las distancias a todas las demás partículas
+        distances = np.linalg.norm(positions - particle_position, axis=1)
+        sorted_distances = np.sort(distances)
+
+        # Retorna la distancia al vecino deseado como una estimación del smoothing length
+        return sorted_distances[desired_neighbors]
+    except Exception as e:
+        print("Error in estimate_smoothing_length: ", e)
+        return None
+    
+def compute_smoothing_length_neighbors_based(positions, num_neighbors=59):
+    try:
+        """
+        Calcula el smoothing length para cada partícula basándose en la distancia a sus 
+        vecinos más cercanos.
+
+        :param positions: Array de posiciones de las partículas (array de dimensiones (N, 3) para 3D).
+        :param num_neighbors: Número de vecinos más cercanos a considerar.
+        :return: Array con el smoothing length calculado para cada partícula.
+        """
+        num_particles = positions.shape[0]
+        h_values = np.zeros(num_particles)
+        # Calcula la distancia entre todas las partículas
+        for i in range(num_particles):
+            distances = np.linalg.norm(positions - positions[i], axis=1)
+            sorted_distances = np.sort(distances)
+            
+            # Considera la distancia al 'num_neighbors'-ésimo vecino más cercano como h
+            if num_neighbors < num_particles:
+                h_values[i] = sorted_distances[num_neighbors]
+            else:
+                h_values[i] = sorted_distances[-1]
+        
+        return h_values
+    
+    except Exception as e:
+        print("Error in compute_smoothing_length_neighbors: ", e)
+        return None

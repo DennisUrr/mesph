@@ -1,5 +1,6 @@
 import numpy as np
-from utils.sph_utils import gradient_gaussian_kernel
+import traceback
+from utils.sph_utils import gradient_gaussian_kernel, gradient_gaussian_kernel_vectorized
 
 
 def compute_thickness(r, ASPECTRATIO):
@@ -97,7 +98,7 @@ def compute_speed_sound(internal_energies, gamma):
     cs = np.sqrt(cs_square)
     return cs
 
-
+#@numba.jit
 def compute_artificial_viscosity_3d_partial(positions, vx, vy, vz, densities, internal_energies, h_values, alpha=1, beta=2):
     """
     Calculates artificial viscosity for a subset of particles in 3D.
@@ -110,35 +111,39 @@ def compute_artificial_viscosity_3d_partial(positions, vx, vy, vz, densities, in
     :param alpha, beta: Parameters for artificial viscosity.
     :return: Artificial viscosity values for each particle (numpy array).
     """
-    N = positions.shape[0]
+    try:
+        N = positions.shape[0]
 
-    # Inicializa el array de viscosidad
-    pi_c_i = np.zeros(N)
+        # Inicializa el array de viscosidad
+        pi_c_i = np.zeros(N)
 
-    for i in range(N):
-        for j in range(N):
-            if i != j:
-                dx = positions[i, 0] - positions[j, 0]
-                dy = positions[i, 1] - positions[j, 1]
-                dz = positions[i, 2] - positions[j, 2]
-                dvx = vx[i] - vx[j]
-                dvy = vy[i] - vy[j]
-                dvz = vz[i] - vz[j]
+        for i in range(N):
+            for j in range(N):
+                if i != j:
+                    dx = positions[i, 0] - positions[j, 0]
+                    dy = positions[i, 1] - positions[j, 1]
+                    dz = positions[i, 2] - positions[j, 2]
+                    dvx = vx[i] - vx[j]
+                    dvy = vy[i] - vy[j]
+                    dvz = vz[i] - vz[j]
 
-                r_ij = np.sqrt(dx**2 + dy**2 + dz**2)
+                    r_ij = np.sqrt(dx**2 + dy**2 + dz**2)
 
-                c_ij = 0.5 * (np.sqrt(internal_energies[i]) + np.sqrt(internal_energies[j]))
-                h_ij = 0.5 * (h_values[i] + h_values[j])
-                condition = dvx*dx + dvy*dy + dvz*dz
-                mu_ij = h_ij * condition / (r_ij**2 + 1e-5 * h_ij**2)
-                rho_ij = 0.5 * (densities[i] + densities[j])
+                    c_ij = 0.5 * (np.sqrt(internal_energies[i]) + np.sqrt(internal_energies[j]))
+                    h_ij = 0.5 * (h_values[i] + h_values[j])
+                    condition = dvx*dx + dvy*dy + dvz*dz
+                    mu_ij = h_ij * condition / (r_ij**2 + 1e-5 * h_ij**2)
+                    rho_ij = 0.5 * (densities[i] + densities[j])
 
-                if condition < 0:
-                    pi_c_ij = -alpha * c_ij * mu_ij / rho_ij + beta * mu_ij**2
-                    pi_c_i[i] += pi_c_ij
+                    if condition < 0:
+                        pi_c_ij = -alpha * c_ij * mu_ij / rho_ij + beta * mu_ij**2
+                        pi_c_i[i] += pi_c_ij
 
-    return pi_c_i
-
+        return pi_c_i
+    except Exception as e:
+        print("Error en compute_artificial_viscosity_3d_partial:", e)
+        return None
+#@numba.jit
 def compute_acceleration_3d_partial(positions, densities, pressures, mass, h_values, viscosities):
     """
     Computes acceleration for a subset of particles in 3D.
@@ -151,38 +156,42 @@ def compute_acceleration_3d_partial(positions, densities, pressures, mass, h_val
     :param viscosities: Viscosity values for particles (numpy array).
     :return: Acceleration vectors for each particle (Nx3 numpy array).
     """
-    N = positions.shape[0]
+    try:
+        N = positions.shape[0]
+        # Inicializa los arrays de aceleración
+        acceleration_x = np.zeros(N)
+        acceleration_y = np.zeros(N)
+        acceleration_z = np.zeros(N)
 
-    # Inicializa los arrays de aceleración
-    acceleration_x = np.zeros(N)
-    acceleration_y = np.zeros(N)
-    acceleration_z = np.zeros(N)
+        for i in range(N):
+            for j in range(N):
+                if i != j:
+                    dx = positions[i, 0] - positions[j, 0]
+                    dy = positions[i, 1] - positions[j, 1]
+                    dz = positions[i, 2] - positions[j, 2]
 
-    for i in range(N):
-        for j in range(N):
-            if i != j:
-                dx = positions[i, 0] - positions[j, 0]
-                dy = positions[i, 1] - positions[j, 1]
-                dz = positions[i, 2] - positions[j, 2]
+                    r = np.sqrt(dx**2 + dy**2 + dz**2)
 
-                r = np.sqrt(dx**2 + dy**2 + dz**2)
+                    if r > 0:
+                        grad_w = gradient_gaussian_kernel(r, 0.5 * (h_values[i] + h_values[j]))
 
-                if r > 0:
-                    grad_w = gradient_gaussian_kernel(r, 0.5 * (h_values[i] + h_values[j]))
+                        term1 = pressures[i] / densities[i]**2
+                        term2 = pressures[j] / densities[j]**2
+                        viscosity = viscosities[i] + viscosities[j]
 
-                    term1 = pressures[i] / densities[i]**2
-                    term2 = pressures[j] / densities[j]**2
-                    viscosity = viscosities[i] + viscosities[j]
+                        a_x = -mass * (term1 + term2 + viscosity) * grad_w * dx/r
+                        a_y = -mass * (term1 + term2 + viscosity) * grad_w * dy/r
+                        a_z = -mass * (term1 + term2 + viscosity) * grad_w * dz/r
 
-                    a_x = -mass * (term1 + term2 + viscosity) * grad_w * dx/r
-                    a_y = -mass * (term1 + term2 + viscosity) * grad_w * dy/r
-                    a_z = -mass * (term1 + term2 + viscosity) * grad_w * dz/r
+                        acceleration_x[i] += a_x
+                        acceleration_y[i] += a_y
+                        acceleration_z[i] += a_z
 
-                    acceleration_x[i] += a_x
-                    acceleration_y[i] += a_y
-                    acceleration_z[i] += a_z
-
-    return np.vstack((acceleration_x, acceleration_y, acceleration_z)).T
+        return np.vstack((acceleration_x, acceleration_y, acceleration_z)).T
+    except Exception as e:
+        print("Error en compute_acceleration_3d_partial:", e)
+        traceback.print_exc()
+        return None
 
 
 def compute_artificial_viscosity_3d_partial_vectorized(positions, vx, vy, vz, densities, internal_energies, h_values, alpha=1, beta=2):
@@ -268,7 +277,7 @@ def compute_acceleration_3d_partial_vectorized(positions, densities, pressures, 
     r[r == 0] = np.inf
 
     # Calcula el gradiente del kernel
-    grad_w = gradient_gaussian_kernel(r, 0.5 * (h_values[:, np.newaxis] + h_values[np.newaxis, :]))
+    grad_w = gradient_gaussian_kernel_vectorized(r, 0.5 * (h_values[:, np.newaxis] + h_values[np.newaxis, :]))
 
     # Calcula los términos de presión y viscosidad
     term1 = pressures / densities**2

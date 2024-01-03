@@ -1,23 +1,26 @@
 import numpy as np
 
-def to_cartesian_3d(rlist, philist, thetalist):
-    """
-    Converts spherical coordinates to Cartesian coordinates in 3D.
-
-    :param rlist: Array of radial distances (r component in spherical coordinates).
-    :param philist: Array of azimuthal angles (phi component in spherical coordinates).
-    :param thetalist: Array of polar angles (theta component in spherical coordinates).
-    :return: Three arrays representing the x, y, and z coordinates in Cartesian coordinate system.
-
-    This function takes arrays of radial distances, azimuthal angles, and polar angles in
-    spherical coordinates and converts them to the x, y, and z coordinates in the Cartesian
-    coordinate system.
-    """
-    x = rlist * np.sin(thetalist) * np.cos(philist)
-    y = rlist * np.sin(thetalist) * np.sin(philist)
-    z = rlist * np.cos(thetalist)
-    # print("Particle sampling completed.")
+def to_cartesian(r, theta, phi):
+    x = r * np.sin(theta) * np.cos(phi)
+    y = r * np.sin(theta) * np.sin(phi)
+    z = r * np.cos(theta)
     return x, y, z
+
+def spherical_to_cartesian(r, phi, theta):
+    '''
+    Convert spherical coordinates to cartesian coordinates.
+    :param r: Radial distance
+    :param phi: Azimuthal angle
+    :param theta: Polar angle
+    :return: x, y, z coordinates in cartesian coordinates, x, y, z coordinates are bidimensional, but has the same data in each dimension
+    '''
+    R, THETA = np.meshgrid(r,theta)
+    PHI, R2 = np.meshgrid(phi,r)
+    X = np.cos(PHI)*R2
+    Y = np.sin(PHI)*R2
+    Z = R*np.cos(THETA)
+    #print("X.shape:", X.shape, "Y.shape:", Y.shape, "Z.shape:", Z.shape)
+    return X, Y, Z
 
 def velocities_to_cartesian_3d(vr, vphi, vtheta, rlist, philist, thetalist):
     """

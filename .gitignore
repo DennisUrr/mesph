@@ -2,7 +2,10 @@
 __pycache__/
 *.py[cod]
 *$py.class
+/mesph/outputs/
 /mesph/outputs/*
+/outputs/
+/outputs/*
 # C extensions
 *.so
 
@@ -122,3 +125,5 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+.run_splash.sh

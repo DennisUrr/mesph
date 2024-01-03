@@ -1,6 +1,8 @@
 import numpy as np
-from multiprocessing import Pool
+from scipy.interpolate import RegularGridInterpolator
+import numba
 
+@numba.njit
 def sample_particles_3d_partial(rho, phi, theta, rmed, phimed, thetamed, r, start_idx, end_idx):
     """
     Samples a subset of particles from 'start_idx' to 'end_idx' using a rejection sampling method
@@ -26,6 +28,7 @@ def sample_particles_3d_partial(rho, phi, theta, rmed, phimed, thetamed, r, star
 
     phi_area = (phi.max() - phi.min()) / (len(phi) - 1)
     r_area = (r.max() - r.min()) / (len(r) - 4)  # ajuste debido a [3:-4] al cargar 'r'
+    theta_area = (theta.max() - theta.min()) / (len(theta) - 1)
 
     N = start_idx
     while N < end_idx:
@@ -35,8 +38,7 @@ def sample_particles_3d_partial(rho, phi, theta, rmed, phimed, thetamed, r, star
         
         iphi = min(int((_phi - phi.min()) / phi_area), len(phimed) - 1)
         ir = min(int((_r - r.min()) / r_area), len(rmed) - 1)
-        itheta = np.random.randint(len(thetamed))
-
+        itheta = min(int((_theta - theta.min()) / theta_area), len(thetamed) - 1)
         _w = np.random.rand()
         
         if _w < P[ir, iphi]:
@@ -145,112 +147,122 @@ def assign_particle_internal_energies_from_grid_3d_partial(rlist, philist, theta
 ######                                      SAMPLING TRILINEAL                                      ########
 ############################################################################################################
 
-# on develop by the moment (2021-09-30)
-def sample_particles_3d_vectorized(rho, grid, Ntot, oversampling_factor=2):
+def trilinear_interpolation_spherical(rho, r, phi, theta, points):
     """
-    Samples particles using a vectorized approach with trilinear interpolation.
+    Realiza una interpolación trilineal en un grid regular en coordenadas esféricas.
 
-    This method uses oversampling and filtering based on interpolated densities to efficiently and accurately sample particles in the simulation domain.
+    :param rho: Grid 3D de densidades.
+    :param r: Array 1D de valores radiales.
+    :param phi: Array 1D de valores azimutales.
+    :param theta: Array 1D de valores polares.
+    :param points: Puntos donde se desea interpolar. Cada punto debe estar en formato (r, phi, theta).
+    :return: Valores interpolados en los puntos dados.
+    """
+    try:
+        # Convertir rho a escala logarítmica
+        rho_log = np.log10(rho)
+
+        # Crea un interpolador en escala logarítmica
+        interpolator = RegularGridInterpolator((theta, r, phi), rho_log)
+
+        # Ajusta los puntos para la interpolación
+        points_adjusted = np.array([(_theta, _r, _phi) for _theta, _r, _phi in points])
+
+        # Realiza la interpolación en escala logarítmica
+        interpolated_log_density = interpolator(points_adjusted)
+
+        # Convierte de vuelta a la escala original
+        return 10**interpolated_log_density
+    except Exception as e:
+        print(f"Error interpolating: {e}")
+        raise e
+
+
+@numba.njit
+def sample_particles_3d_trilineal_partial(rho, phi, theta, r, start_idx, end_idx):
+
+    """
+    Samples a subset of particles from 'start_idx' to 'end_idx' using a rejection sampling method
+    based on the local density distribution from a 3D grid.
+
+    This function is designed to be used in a parallel processing context where the sampling
+    of particles is distributed across multiple processes.
 
     :param rho: 3D density grid from simulation data.
-    :param grid: Grid arrays for r, phi, and theta coordinates.
-    :param Ntot: Total number of particles to sample.
-    :param oversampling_factor: Factor to control the initial oversampling rate.
-    :return: Arrays of sampled r, phi, and theta coordinates for the particles.
+    :param phi, theta: Angular coordinates from the simulation grid.
+    :param rmed, phimed, thetamed: Median values of the radial, azimuthal, and polar angles.
+    :param r: Radial coordinate array.
+    :param start_idx, end_idx: Start and end indices for particle sampling in this subset.
+    :return: Arrays of sampled r, phi, and theta values for the particles.
     """
-    # Estimar cuántos puntos generar (puede necesitar ajustes)
-    num_candidates = int(Ntot * oversampling_factor)
+    try:
+        local_Ntot = end_idx - start_idx
 
-    # Generar puntos candidatos
-    _rs = np.random.uniform(grid[0].min(), grid[0].max(), num_candidates)
-    _phis = np.random.uniform(grid[1].min(), grid[1].max(), num_candidates)
-    _thetas = np.random.uniform(grid[2].min(), grid[2].max(), num_candidates)
+        philist = np.zeros(local_Ntot)
+        rlist = np.zeros(local_Ntot)
+        thetalist = np.zeros(local_Ntot)
 
-    # Interpolación trilineal para todos los puntos
-    interpolated_densities = trilinear_interpolation(_rs, _phis, _thetas, grid, rho)
+        N = start_idx
+        while N < end_idx:
+            #print(theta.max(), theta[-2], theta[-1])
+            _phi = np.random.uniform(phi.min(), phi[-2])
+            _r = np.random.uniform(r.min(), r.max())
+            _theta = np.random.uniform(theta.min(), theta[-2])
 
-    # Filtrar puntos
-    acceptance_probability = interpolated_densities / rho.max()
-    accepted_indices = np.random.rand(num_candidates) < acceptance_probability
+            # Calcula la densidad interpolada en el punto seleccionado
+            interpolated_density = trilinear_interpolation_spherical(rho, r, phi[:-1], theta[:-1], [(_theta, _r, _phi)])
+            # Decide si aceptar o rechazar la muestra basada en la densidad interpolada
+            _w = np.random.rand()
 
-    # Asegurarse de seleccionar exactamente Ntot partículas
-    accepted_r = _rs[accepted_indices][:Ntot]
-    accepted_phi = _phis[accepted_indices][:Ntot]
-    accepted_theta = _thetas[accepted_indices][:Ntot]
+            if _w < interpolated_density[0]:
+                #print("Sample accepted.")
+                philist[N - start_idx] = _phi
+                rlist[N - start_idx] = _r
+                thetalist[N - start_idx] = _theta
+                N += 1
 
-    return accepted_r, accepted_phi, accepted_theta
+        return rlist, philist, thetalist
+    except Exception as e:
+        print(f"Error sampling particles: {e}")
+        raise e
+    
+@numba.njit
+def sample_particles_3d_partial_1(rho, phi, theta, rmed, phimed, thetamed, r, start_idx, end_idx):
 
-def trilinear_interpolation(point, grid, values):
-    """
-    Performs trilinear interpolation for a given point within a 3D grid.
-
-    :param point: The point (r, phi, theta) where interpolation is to be performed.
-    :param grid: Grid arrays for r, phi, and theta coordinates.
-    :param values: 3D array of values corresponding to the grid points.
-    :return: Interpolated value at the given point.
-    """
-    # Encuentra los índices de los puntos de la cuadrícula que rodean el punto de interés
-    r_idx, phi_idx, theta_idx = [
-        max(min(np.searchsorted(grid[dim], point[dim]) - 1, len(grid[dim]) - 2), 0)
-        for dim in range(3)
-    ]
-
-    # Calcula los factores de interpolación para cada dimensión
-    dr, dphi, dtheta = [
-        (point[dim] - grid[dim][idx]) / (grid[dim][idx + 1] - grid[dim][idx])
-        if grid[dim][idx + 1] > grid[dim][idx] else 0
-        for dim, idx in enumerate([r_idx, phi_idx, theta_idx])
-    ]
-
-    # Interpola la densidad
-    interpolated_value = 0
-    for i in [0, 1]:
-        for j in [0, 1]:
-            for k in [0, 1]:
-                weight = ((dr if i == 1 else 1 - dr) *
-                          (dphi if j == 1 else 1 - dphi) *
-                          (dtheta if k == 1 else 1 - dtheta))
-                interpolated_value += weight * values[theta_idx + k, r_idx + i, phi_idx + j]
-    return interpolated_value
-
-
-#revisar esta función
-def sample_particles_3d_interpolated(rho, rmed, phimed, thetamed, start_idx, end_idx):
-    """
-    Samples particles using trilinear interpolation within a specific range defined by start_idx and end_idx.
-
-    This function is suitable for parallel processing where the sampling task is divided among multiple processors.
-
-    :param rho: 3D density grid from simulation data.
-    :param rmed, phimed, thetamed: Median values for the grid coordinates.
-    :param start_idx, end_idx: Indices defining the range of particles to sample.
-    :return: Arrays of sampled r, phi, and theta coordinates for the particles in the specified range.
-    """
     local_Ntot = end_idx - start_idx
-    rlist = np.zeros(local_Ntot)
+
+    # Crear una matriz de probabilidad 3D
+    P_3D = rho / rho.sum()
+
     philist = np.zeros(local_Ntot)
+    rlist = np.zeros(local_Ntot)
     thetalist = np.zeros(local_Ntot)
 
-    # Crear una cuadrícula para la interpolación [aquiiii]
-    grid = [rmed, phimed, thetamed]
+    phi_area = (phi.max() - phi.min()) / (len(phi) - 1)
+    r_area = (r.max() - r.min()) / (len(r) - 4)  # ajuste debido a [3:-4] al cargar 'r'
+    theta_area = (theta.max() - theta.min()) / (len(theta) - 1)
 
-    N = 0
-    while N < local_Ntot:
-        _r = np.random.uniform(rmed.min(), rmed.max())
-        _phi = np.random.uniform(phimed.min(), phimed.max())
-        _theta = np.random.uniform(thetamed.min(), thetamed.max())
+    
 
-        # Punto para interpolación
-        point = [_r, _phi, _theta]
+    N = start_idx
+    while N < end_idx:
+        _phi = np.random.uniform(phi.min(), phi.max())
+        _r = np.random.uniform(r.min(), r.max())
+        _theta = np.random.uniform(theta.min(), theta.max())
 
-        # Realizar interpolación trilineal
-        interpolated_density = trilinear_interpolation(point, grid, rho)
+        
+        iphi = min(int((_phi - phi.min()) / phi_area), len(phimed) - 1)
+        ir = min(int((_r - r.min()) / r_area), len(rmed) - 1)
+        itheta = min(int((_theta - theta.min()) / theta_area), len(thetamed) - 1)
 
-        # Decidir si aceptar la partícula basado en la densidad interpolada
-        if np.random.rand() < interpolated_density / rho.max():
-            rlist[N] = _r
-            philist[N] = _phi
-            thetalist[N] = _theta
+        _w = np.random.rand()
+
+        # Muestreo basado en la probabilidad 3D
+        if _w < P_3D[itheta, ir, iphi]:
+            #print("Sample accepted.")
+            philist[N - start_idx] = _phi
+            rlist[N - start_idx] = _r
+            thetalist[N - start_idx] = _theta
             N += 1
 
     return rlist, philist, thetalist
