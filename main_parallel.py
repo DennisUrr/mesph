@@ -10,7 +10,9 @@ from run_splash import run_splash
 import argparse
 from tqdm import tqdm
 
-def main(total_cpus, output_dir, path_outputs_fargo, total_timesteps, Ntot, alpha, beta, extrapolation_mode, total_files, dT_initial=None, dT_final=None):
+global h_mode
+
+def main(total_cpus, output_dir, path_outputs_fargo, total_timesteps, Ntot, alpha, beta, extrapolation_mode, total_files, h_mode, vectorized_mode, dT_initial=None, dT_final=None):
     dT=str(0)
 
     global particle_mass
@@ -61,7 +63,7 @@ def main(total_cpus, output_dir, path_outputs_fargo, total_timesteps, Ntot, alph
                 start_idx = file_idx * Ntot_per_file
                 end_idx = start_idx + Ntot_per_file if file_idx != total_files - 1 else Ntot
                 # Add a task for each file
-                tasks.append((file_idx, dT, params, gamma, ASPECTRATIO, alpha, beta, extrapolation_mode, Ntot, Ntot_per_file, rho, phi, theta, r, phimed, rmed, thetamed, vphi, vr, vtheta, u, nr, ntheta, start_idx, end_idx, unique_dir, total_files))
+                tasks.append((file_idx, dT, params, gamma, ASPECTRATIO, alpha, beta, extrapolation_mode, Ntot, Ntot_per_file, rho, phi, theta, r, phimed, rmed, thetamed, vphi, vr, vtheta, u, nr, ntheta, start_idx, end_idx, unique_dir, total_files, h_mode, vectorized_mode))
     
     elif dT_final == None:
         
@@ -84,7 +86,7 @@ def main(total_cpus, output_dir, path_outputs_fargo, total_timesteps, Ntot, alph
                 start_idx = file_idx * Ntot_per_file
                 end_idx = start_idx + Ntot_per_file if file_idx != total_files - 1 else Ntot
                 # Add a task for each file
-                tasks.append((file_idx, str(int(dT)-dT_initial), params, gamma, ASPECTRATIO, alpha, beta, extrapolation_mode, Ntot, Ntot_per_file, rho, phi, theta, r, phimed, rmed, thetamed, vphi, vr, vtheta, u, nr, ntheta, start_idx, end_idx, unique_dir, total_files))
+                tasks.append((file_idx, str(int(dT)-dT_initial), params, gamma, ASPECTRATIO, alpha, beta, extrapolation_mode, Ntot, Ntot_per_file, rho, phi, theta, r, phimed, rmed, thetamed, vphi, vr, vtheta, u, nr, ntheta, start_idx, end_idx, unique_dir, total_files, h_mode, vectorized_mode))
     else:
         
         for dT in range(dT_initial, dT_final+1):
@@ -106,7 +108,7 @@ def main(total_cpus, output_dir, path_outputs_fargo, total_timesteps, Ntot, alph
                 start_idx = file_idx * Ntot_per_file
                 end_idx = start_idx + Ntot_per_file if file_idx != total_files - 1 else Ntot
                 # Add a task for each file
-                tasks.append((file_idx, str(int(dT)-dT_initial), params, gamma, ASPECTRATIO, alpha, beta, extrapolation_mode, Ntot, Ntot_per_file, rho, phi, theta, r, phimed, rmed, thetamed, vphi, vr, vtheta, u, nr, ntheta, start_idx, end_idx, unique_dir, total_files))
+                tasks.append((file_idx, str(int(dT)-dT_initial), params, gamma, ASPECTRATIO, alpha, beta, extrapolation_mode, Ntot, Ntot_per_file, rho, phi, theta, r, phimed, rmed, thetamed, vphi, vr, vtheta, u, nr, ntheta, start_idx, end_idx, unique_dir, total_files, h_mode, vectorized_mode))
         #total_timesteps = dT_final - dT_initial + 1
 
 
@@ -115,9 +117,6 @@ def main(total_cpus, output_dir, path_outputs_fargo, total_timesteps, Ntot, alph
         with tqdm(total=len(tasks), desc='Processing files') as progress_bar:
             for future in as_completed(futures):
                 progress_bar.update(1)
-
-
-
 
     source_files = ['outputs/splash.defaults', 'outputs/splash.limits']
     destination_directory = unique_dir
@@ -128,6 +127,7 @@ def main(total_cpus, output_dir, path_outputs_fargo, total_timesteps, Ntot, alph
     run_splash(total_timesteps, unique_dir)
 
 if __name__ == '__main__':
+
     init_time = time.time()
 
     # Create an argument parser
@@ -165,7 +165,9 @@ if __name__ == '__main__':
 
     parser.add_argument('-m', '--mode', type=int, default=0, help='Mode: 0 = 0 -> t, 1 = t_initial -> t, 2 = t_initial -> t_final.')
 
+    parser.add_argument('-hm', '--smoothig_length_mode', type=int, default=0, help='Mode: 0 = density based, 1 = adaptative, 2 .')
 
+    parser.add_argument('-vm', '--vectorized_mode', type=int, default=0, help='Mode: 0 = no vectorized, 1 = vectorized.')
     # Type of parallelization
     args = parser.parse_args()
     total_cpus = args.processors
@@ -180,21 +182,23 @@ if __name__ == '__main__':
     dT_initial = args.dT_initial
     dT_final = args.dT_final
     mode = args.mode
-
+    h_mode = args.smoothig_length_mode
+    vectorized_mode = args.vectorized_mode
+    
     # print(f"Total CPUs: {total_cpus}")
     # print(f"total_files: {total_files}")
 
     if mode == 0:
         dT_initial = None
         dT_final = None
-        main(total_cpus, output_dir, path_outputs_fargo, total_timesteps, Ntot, alpha, beta, extrapolation_mode, total_files)
+        main(total_cpus, output_dir, path_outputs_fargo, total_timesteps, Ntot, alpha, beta, extrapolation_mode, total_files, h_mode, vectorized_mode)
         
     elif mode == 1:
         dT_final = None
-        main(total_cpus, output_dir, path_outputs_fargo, total_timesteps, Ntot, alpha, beta, extrapolation_mode, total_files, dT_initial)
+        main(total_cpus, output_dir, path_outputs_fargo, total_timesteps, Ntot, alpha, beta, extrapolation_mode, total_files, h_mode, vectorized_mode, dT_initial)
         
     else:
-        main(total_cpus, output_dir, path_outputs_fargo, total_timesteps, Ntot, alpha, beta, extrapolation_mode, total_files, dT_initial, dT_final)
+        main(total_cpus, output_dir, path_outputs_fargo, total_timesteps, Ntot, alpha, beta, extrapolation_mode, total_files, h_mode, vectorized_mode, dT_initial, dT_final)
         
     
     print(f"Tiempo total: {round(time.time() - init_time, 5)} segundos.")
