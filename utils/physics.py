@@ -1,6 +1,6 @@
 import numpy as np
 import traceback
-from utils.sph_utils import gradient_gaussian_kernel
+from utils.sph_utils import gradient_gaussian_kernel, gradient_gaussian_kernel_vectorized
 
 
 def compute_thickness(r, ASPECTRATIO):
@@ -277,7 +277,7 @@ def compute_acceleration_3d_partial_vectorized(positions, densities, pressures, 
     r[r == 0] = np.inf
 
     # Calcula el gradiente del kernel
-    grad_w = gradient_gaussian_kernel(r, 0.5 * (h_values[:, np.newaxis] + h_values[np.newaxis, :]))
+    grad_w = gradient_gaussian_kernel_vectorized(r, 0.5 * (h_values[:, np.newaxis] + h_values[np.newaxis, :]))
 
     # Calcula los términos de presión y viscosidad
     term1 = pressures / densities**2
