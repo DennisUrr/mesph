@@ -10,9 +10,8 @@ from run_splash import run_splash
 import argparse
 from tqdm import tqdm
 
-global h_mode
 
-def main(total_cpus, output_dir, path_outputs_fargo, total_timesteps, Ntot, alpha, beta, extrapolation_mode, total_files, h_mode, vectorized_mode, dT_initial=None, dT_final=None):
+def main(total_cpus, output_dir, path_outputs_fargo, total_timesteps, Ntot, alpha, beta, extrapolation_mode, total_files, h_mode, vectorized_mode, dust_mode, dT_initial=None, dT_final=None):
     dT=str(0)
 
     global particle_mass
@@ -58,12 +57,22 @@ def main(total_cpus, output_dir, path_outputs_fargo, total_timesteps, Ntot, alph
             # load the gas internal energy
             u = np.fromfile( path_outputs_fargo + '/gasenergy' + dT + '.dat').reshape(len(theta)-1, len(r), len(phi)-1)
             
+            # load dust density
+
+            rho_dust = np.fromfile( path_outputs_fargo + '/dust1dens' + dT + '.dat').reshape(len(theta)-1,len(r),len(phi)-1)#volume density
+
+            # load dust velocities
+
+            vphi_dust = np.fromfile( path_outputs_fargo + '/dust1vx' + dT + '.dat').reshape(len(theta)-1, len(r), len(phi)-1)
+            vr_dust = np.fromfile( path_outputs_fargo + '/dust1vy' + dT + '.dat').reshape(len(theta)-1, len(r), len(phi)-1)
+            vtheta_dust = np.fromfile( path_outputs_fargo + '/dust1vz' + dT + '.dat').reshape(len(theta)-1, len(r), len(phi)-1)
+            
             # print("FARGO3D files loaded") 
             for file_idx in range(total_files):
                 start_idx = file_idx * Ntot_per_file
                 end_idx = start_idx + Ntot_per_file if file_idx != total_files - 1 else Ntot
                 # Add a task for each file
-                tasks.append((file_idx, dT, params, gamma, ASPECTRATIO, alpha, beta, extrapolation_mode, Ntot, Ntot_per_file, rho, phi, theta, r, phimed, rmed, thetamed, vphi, vr, vtheta, u, nr, ntheta, start_idx, end_idx, unique_dir, total_files, h_mode, vectorized_mode))
+                tasks.append((file_idx, dT, params, gamma, ASPECTRATIO, alpha, beta, extrapolation_mode, Ntot, Ntot_per_file, rho, phi, theta, r, phimed, rmed, thetamed, vphi, vr, vtheta, u, nr, ntheta, rho_dust, vphi_dust, vr_dust, vtheta_dust, start_idx, end_idx, unique_dir, total_files, h_mode, vectorized_mode, dust_mode))
     
     elif dT_final == None:
         
@@ -81,12 +90,23 @@ def main(total_cpus, output_dir, path_outputs_fargo, total_timesteps, Ntot, alph
             # load the gas internal energy
             u = np.fromfile( path_outputs_fargo + '/gasenergy' + dT + '.dat').reshape(len(theta)-1, len(r), len(phi)-1)
             
+            # load dust density
+
+            rho_dust = np.fromfile( path_outputs_fargo + '/dust1dens' + dT + '.dat').reshape(len(theta)-1,len(r),len(phi)-1)#volume density
+
+            # load dust velocities
+
+            vphi_dust = np.fromfile( path_outputs_fargo + '/dust1vx' + dT + '.dat').reshape(len(theta)-1, len(r), len(phi)-1)
+            vr_dust = np.fromfile( path_outputs_fargo + '/dust1vy' + dT + '.dat').reshape(len(theta)-1, len(r), len(phi)-1)
+            vtheta_dust = np.fromfile( path_outputs_fargo + '/dust1vz' + dT + '.dat').reshape(len(theta)-1, len(r), len(phi)-1)
+            
+
             # print("FARGO3D files loaded") 
             for file_idx in range(total_files):
                 start_idx = file_idx * Ntot_per_file
                 end_idx = start_idx + Ntot_per_file if file_idx != total_files - 1 else Ntot
                 # Add a task for each file
-                tasks.append((file_idx, str(int(dT)-dT_initial), params, gamma, ASPECTRATIO, alpha, beta, extrapolation_mode, Ntot, Ntot_per_file, rho, phi, theta, r, phimed, rmed, thetamed, vphi, vr, vtheta, u, nr, ntheta, start_idx, end_idx, unique_dir, total_files, h_mode, vectorized_mode))
+                tasks.append((file_idx, str(int(dT)-dT_initial), params, gamma, ASPECTRATIO, alpha, beta, extrapolation_mode, Ntot, Ntot_per_file, rho, phi, theta, r, phimed, rmed, thetamed, vphi, vr, vtheta, u, nr, ntheta, rho_dust, vphi_dust, vr_dust, vtheta_dust, start_idx, end_idx, unique_dir, total_files, h_mode, vectorized_mode, dust_mode))
     else:
         
         for dT in range(dT_initial, dT_final+1):
@@ -103,13 +123,23 @@ def main(total_cpus, output_dir, path_outputs_fargo, total_timesteps, Ntot, alph
             # load the gas internal energy
             u = np.fromfile( path_outputs_fargo + '/gasenergy' + dT + '.dat').reshape(len(theta)-1, len(r), len(phi)-1)
             
+            # load dust density
+
+            rho_dust = np.fromfile( path_outputs_fargo + '/dust1dens' + dT + '.dat').reshape(len(theta)-1,len(r),len(phi)-1)#volume density
+
+            # load dust velocities
+
+            vphi_dust = np.fromfile( path_outputs_fargo + '/dust1vx' + dT + '.dat').reshape(len(theta)-1, len(r), len(phi)-1)
+            vr_dust = np.fromfile( path_outputs_fargo + '/dust1vy' + dT + '.dat').reshape(len(theta)-1, len(r), len(phi)-1)
+            vtheta_dust = np.fromfile( path_outputs_fargo + '/dust1vz' + dT + '.dat').reshape(len(theta)-1, len(r), len(phi)-1)
+
             # print("FARGO3D files loaded") 
             for file_idx in range(total_files):
                 start_idx = file_idx * Ntot_per_file
                 end_idx = start_idx + Ntot_per_file if file_idx != total_files - 1 else Ntot
                 # Add a task for each file
-                tasks.append((file_idx, str(int(dT)-dT_initial), params, gamma, ASPECTRATIO, alpha, beta, extrapolation_mode, Ntot, Ntot_per_file, rho, phi, theta, r, phimed, rmed, thetamed, vphi, vr, vtheta, u, nr, ntheta, start_idx, end_idx, unique_dir, total_files, h_mode, vectorized_mode))
-        #total_timesteps = dT_final - dT_initial + 1
+                tasks.append((file_idx, str(int(dT)-dT_initial), params, gamma, ASPECTRATIO, alpha, beta, extrapolation_mode, Ntot, Ntot_per_file, rho, phi, theta, r, phimed, rmed, thetamed, vphi, vr, vtheta, u, nr, ntheta, rho_dust, vphi_dust, vr_dust, vtheta_dust, start_idx, end_idx, unique_dir, total_files, h_mode, vectorized_mode, dust_mode))
+        total_timesteps = dT_final - dT_initial + 1
 
 
     with ProcessPoolExecutor(max_workers=total_cpus) as executor:
@@ -168,6 +198,8 @@ if __name__ == '__main__':
     parser.add_argument('-hm', '--smoothig_length_mode', type=int, default=0, help='Mode: 0 = density based, 1 = adaptative, 2 .')
 
     parser.add_argument('-vm', '--vectorized_mode', type=int, default=0, help='Mode: 0 = no vectorized, 1 = vectorized.')
+    
+    parser.add_argument('-dm', '--dust_mode', type=int, default=0, help='Mode: 0 = no dust, 1 = dust. Defaults to 0.')
     # Type of parallelization
     args = parser.parse_args()
     total_cpus = args.processors
@@ -184,6 +216,7 @@ if __name__ == '__main__':
     mode = args.mode
     h_mode = args.smoothig_length_mode
     vectorized_mode = args.vectorized_mode
+    dust_mode = args.dust_mode
     
     # print(f"Total CPUs: {total_cpus}")
     # print(f"total_files: {total_files}")
@@ -191,14 +224,14 @@ if __name__ == '__main__':
     if mode == 0:
         dT_initial = None
         dT_final = None
-        main(total_cpus, output_dir, path_outputs_fargo, total_timesteps, Ntot, alpha, beta, extrapolation_mode, total_files, h_mode, vectorized_mode)
+        main(total_cpus, output_dir, path_outputs_fargo, total_timesteps, Ntot, alpha, beta, extrapolation_mode, total_files, h_mode, vectorized_mode, dust_mode)
         
     elif mode == 1:
         dT_final = None
-        main(total_cpus, output_dir, path_outputs_fargo, total_timesteps, Ntot, alpha, beta, extrapolation_mode, total_files, h_mode, vectorized_mode, dT_initial)
+        main(total_cpus, output_dir, path_outputs_fargo, total_timesteps, Ntot, alpha, beta, extrapolation_mode, total_files, h_mode, vectorized_mode, dust_mode, dT_initial)
         
     else:
-        main(total_cpus, output_dir, path_outputs_fargo, total_timesteps, Ntot, alpha, beta, extrapolation_mode, total_files, h_mode, vectorized_mode, dT_initial, dT_final)
+        main(total_cpus, output_dir, path_outputs_fargo, total_timesteps, Ntot, alpha, beta, extrapolation_mode, total_files, h_mode, vectorized_mode, dust_mode, dT_initial, dT_final)
         
     
     print(f"Tiempo total: {round(time.time() - init_time, 5)} segundos.")

@@ -66,6 +66,59 @@ def create_snapshot_file(dT, file_idx, Ntot, positions_3d, velocities, masses, p
     #print("==============================================================\n", "========= HDF5 File "+ str(dT) +"."+ str(file_idx) +" Created. =========\n", "==============================================================")
     #print(dT, '.' ,file_idx, " Created.")
 
+
+def create_snapshot_file_dust(dT, file_idx, Ntot, positions_3d, velocities, masses, particle_energies, densities, h_values, accelerations, pressures, viscosities, base_filename, total_files, unique_dir, start_idx, end_idx, positions_3d_dust, velocities_dust, densities_dust):
+    """
+    Creates a snapshot file for a specific time and file index with particle data in HDF5 format.
+
+    :param dT: Time step of the snapshot.
+    :param file_idx: File index for the current snapshot part.
+    :param Ntot: Total number of particles.
+    :param positions_3d, velocities, ids, masses, particle_energies, densities, h_values, accelerations, pressures, viscosities: Particle properties arrays.
+    :param base_filename: The base name for the snapshot files.
+    :param total_files: Total number of files per snapshot.
+    :param unique_dir: The directory where the snapshot file will be saved.
+
+    The function creates a snapshot file named with the time step and file index, containing all the provided particle properties.
+    """
+    # Assign particle IDs
+    ids = np.arange(start_idx, end_idx, dtype=np.int32)
+    # Define the full filename with the path to the unique directory
+    filename = os.path.join(unique_dir, f'{base_filename}_{int(dT):03d}.{file_idx}.hdf5')
+
+    with h5py.File(filename, 'w') as f:
+        # Create the Header group and set attributes
+        header = f.create_group("/Header")
+        header.attrs['NumPart_ThisFile'] = [Ntot, 0, 0, 0, 0, 0]
+        header.attrs['NumPart_Total'] = [Ntot * total_files, 0, 0, 0, 0, 0]  # Ntot * total_files is the total number of particles across all files
+        header.attrs['NumPart_Total_HighWord'] = [0, 0, 0, 0, 0, 0]
+        header.attrs['MassTable'] = [0, 0, 0, 0, 0, 0]
+        header.attrs['Time'] = int(dT)*pi
+        header.attrs['Redshift'] = 0
+        header.attrs["NumFilesPerSnapshot"] = total_files
+        header.attrs["Dimension"] = 3
+
+        # Create the PartType0 group and add datasets
+        pt0 = f.create_group("/PartType0") # GAS
+        pt0.create_dataset("Coordinates", data=positions_3d)
+        pt0.create_dataset("Velocities", data=velocities)
+        pt0.create_dataset("ParticleIDs", data=ids)
+        pt0.create_dataset("Masses", data=masses)
+        pt0.create_dataset("InternalEnergy", data=particle_energies)
+        pt0.create_dataset("Density", data=densities)
+        pt0.create_dataset("SmoothingLength", data=h_values)
+        pt0.create_dataset("Acceleration", data=accelerations)
+        pt0.create_dataset("Pressure", data=pressures)
+        pt0.create_dataset("Viscosity", data=viscosities)
+
+        # Create the PartType2 group and add datasets
+        pt2 = f.create_group("/PartType2")
+        pt2.create_dataset("Coordinates", data=positions_3d_dust)
+        pt2.create_dataset("Velocities", data=velocities_dust)
+        pt2.create_dataset("ParticleIDs", data=ids)
+        pt2.create_dataset("Density", data=densities_dust)
+
+
 def copy_files_to_directory(source_files, destination_directory):
     """
     Copies files to a destination directory.
