@@ -12,13 +12,13 @@ from tqdm import tqdm
 
 global h_mode
 
-def main(total_cpus, output_dir, path_outputs_fargo, total_timesteps, Ntot, alpha, beta, extrapolation_mode, total_files, h_mode, vectorized_mode, dT_initial=None, dT_final=None):
+def main(total_cpus, output_dir, path_outputs_fargo, total_timesteps, Ntot, alpha, beta, extrapolation_mode, total_files, h_mode, vectorized_mode, args, dT_initial=None, dT_final=None):
     dT=str(0)
 
     global particle_mass
     global params, gamma, ASPECTRATIO, Ntot_per_file, phi, r, theta, phimed, rmed, thetamed, nphi, nr, ntheta
 
-    unique_dir = create_unique_directory(output_dir)
+    unique_dir = create_unique_directory(output_dir, args)
     print(f"Unique directory created: {unique_dir}")
 
     params = read_parameters( path_outputs_fargo + "/variables.par")
@@ -191,14 +191,14 @@ if __name__ == '__main__':
     if mode == 0:
         dT_initial = None
         dT_final = None
-        main(total_cpus, output_dir, path_outputs_fargo, total_timesteps, Ntot, alpha, beta, extrapolation_mode, total_files, h_mode, vectorized_mode)
+        main(total_cpus, output_dir, path_outputs_fargo, total_timesteps, Ntot, alpha, beta, extrapolation_mode, total_files, h_mode, vectorized_mode, args)
         
     elif mode == 1:
         dT_final = None
-        main(total_cpus, output_dir, path_outputs_fargo, total_timesteps, Ntot, alpha, beta, extrapolation_mode, total_files, h_mode, vectorized_mode, dT_initial)
+        main(total_cpus, output_dir, path_outputs_fargo, total_timesteps, Ntot, alpha, beta, extrapolation_mode, total_files, h_mode, vectorized_mode, args, dT_initial)
         
     else:
-        main(total_cpus, output_dir, path_outputs_fargo, total_timesteps, Ntot, alpha, beta, extrapolation_mode, total_files, h_mode, vectorized_mode, dT_initial, dT_final)
+        main(total_cpus, output_dir, path_outputs_fargo, total_timesteps, Ntot, alpha, beta, extrapolation_mode, total_files, h_mode, vectorized_mode, args, dT_initial, dT_final)
         
     
     print(f"Tiempo total: {round(time.time() - init_time, 5)} segundos.")

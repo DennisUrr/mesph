@@ -4,20 +4,50 @@ import shutil
 from math import pi
 import numpy as np
 
-def create_unique_directory(base_path):
+
+def create_unique_directory(base_path, args):
     """
-    Creates a unique directory. If the base directory already exists, it creates a new one with an incremental index.
+    Creates a unique directory with specified abbreviated arguments in its name. 
+    If the base directory already exists, it creates a new one with an incremental index.
     :param base_path: The base path of the directory to be created.
+    :param args: Arguments to be included in the directory name.
     :return: The path of the created directory.
     """
+
+    # Mapeo de argumentos a sus abreviaturas
+    arg_map = {
+        'processors': 'p',
+        'particles': 'n',
+        'alpha': 'a',
+        'beta': 'b',
+        'extrapolation': 'e',
+        'total_files': 'tf',
+        'dT_initial': 'dti',
+        'dT_final': 'dtf',
+        'mode': 'm',
+        'smoothig_length_mode': 'hm',
+        'vectorized_mode': 'vm'
+    }
+
+    # Función para crear una cadena con las abreviaturas de los argumentos
+    def create_arg_string(args):
+        arg_items = vars(args).items()
+        return '_'.join(f"{arg_map.get(key, key)}{value}" for key, value in arg_items if value is not None and key in arg_map)
+
+    # Incluye los argumentos en el nombre del directorio
+    arg_str = create_arg_string(args)
+    base_path_with_args = f"{base_path}_{arg_str}"
+    
     counter = 0
-    new_path = base_path
+    new_path = base_path_with_args
     while os.path.exists(new_path):
         counter += 1
-        new_path = f"{base_path}_{counter}"
+        new_path = f"{base_path_with_args}_{counter}"
     
     os.makedirs(new_path)
     return new_path
+
+
 
 def create_snapshot_file(dT, file_idx, Ntot, positions_3d, velocities, masses, particle_energies, densities, h_values, accelerations, pressures, viscosities, base_filename, total_files, unique_dir, start_idx, end_idx):
     """

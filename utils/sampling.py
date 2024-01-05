@@ -252,7 +252,7 @@ def sample_particles_3d_partial_1(rho, phi, theta, rmed, phimed, thetamed, r, st
 
         
         iphi = min(int((_phi - phi.min()) / phi_area), len(phimed) - 1)
-        ir = min(int((_r - r.min()) / r_area), len(rmed) - 1)
+        ir = min(int((_r - r.min()) / r_area), len(rmed) - 4)
         itheta = min(int((_theta - theta.min()) / theta_area), len(thetamed) - 1)
 
         _w = np.random.rand()
