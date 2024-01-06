@@ -37,7 +37,7 @@ def sample_particles_3d_partial(rho, phi, theta, rmed, phimed, thetamed, r, star
         _theta = np.random.uniform(theta.min(), theta.max())
         
         iphi = min(int((_phi - phi.min()) / phi_area), len(phimed) - 1)
-        ir = min(int((_r - r.min()) / r_area), len(rmed) - 1)
+        ir = min(int((_r - r.min()) / r_area), len(rmed) - 4)
         itheta = min(int((_theta - theta.min()) / theta_area), len(thetamed) - 1)
         _w = np.random.rand()
         
@@ -178,7 +178,7 @@ def trilinear_interpolation_spherical(rho, r, phi, theta, points):
         raise e
 
 
-@numba.njit
+#@numba.njit
 def sample_particles_3d_trilineal_partial(rho, phi, theta, r, start_idx, end_idx):
 
     """
@@ -266,3 +266,46 @@ def sample_particles_3d_partial_1(rho, phi, theta, rmed, phimed, thetamed, r, st
             N += 1
 
     return rlist, philist, thetalist
+
+def calculate_velocity_probability_matrix(vphi, vr, vtheta):
+    # Calcular la magnitud de la velocidad
+    velocity_magnitude = np.sqrt(vphi**2 + vr**2 + vtheta**2)
+
+    # Normalizar para crear una matriz de probabilidades
+    probability_matrix = velocity_magnitude / np.sum(velocity_magnitude)
+    return probability_matrix
+
+def sample_particle_velocities(probability_matrix, vphi, vr, vtheta, rlist, philist, thetalist, rmed, phimed, thetamed, start_idx, end_idx):
+    local_Ntot = end_idx - start_idx
+    sampled_vphi = np.zeros(local_Ntot)
+    sampled_vr = np.zeros(local_Ntot)
+    sampled_vtheta = np.zeros(local_Ntot)
+
+    phi_area = (philist.max() - philist.min()) / (len(philist) - 1)
+    r_area = (rlist.max() - rlist.min()) / (len(rlist) - 4)  # ajuste debido a [3:-4] al cargar 'r'
+    theta_area = (thetalist.max() - thetalist.min()) / (len(thetalist) - 1)
+
+    for idx in range(local_Ntot):
+        while True:
+            # Selecciona un punto aleatorio en la cuadrícula
+            _phi = np.random.choice(philist)
+            _r = np.random.choice(rlist)
+            _theta = np.random.choice(thetalist)
+
+            # Calcula la probabilidad correspondiente
+            iphi = min(int((_phi - philist.min()) / phi_area), len(phimed) - 1)
+            ir = min(int((_r - rlist.min()) / r_area), len(rmed) - 4)
+            itheta = min(int((_theta - thetalist.min()) / theta_area), len(thetamed) - 1)
+            
+            prob = probability_matrix[itheta, ir, iphi]
+
+            # Decide si aceptar o rechazar la muestra
+            if np.random.rand() < prob:
+                sampled_vphi[idx] = vphi[itheta, ir, iphi]
+                sampled_vr[idx] = vr[itheta, ir, iphi]
+                sampled_vtheta[idx] = vtheta[itheta, ir, iphi]
+                break
+
+    return sampled_vphi, sampled_vr, sampled_vtheta
+
+
