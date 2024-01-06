@@ -1,7 +1,7 @@
 import numpy as np
 import traceback
-from utils.conversions import velocities_to_cartesian_3d, to_cartesian
-from utils.sampling import sample_particles_3d_partial, assign_particle_velocities_from_grid_3d_partial, assign_particle_densities_from_grid_3d_partial, assign_particle_internal_energies_from_grid_3d_partial, sample_particles_3d_trilineal_partial, sample_particles_3d_partial_1
+from utils.conversions import spherical_to_cartesian, velocities_to_cartesian_3d, to_cartesian
+from utils.sampling import sample_particles_3d_partial, assign_particle_velocities_from_grid_3d_partial, assign_particle_densities_from_grid_3d_partial, assign_particle_internal_energies_from_grid_3d_partial, sample_particles_3d_trilineal_partial, sample_particle_velocities, calculate_velocity_probability_matrix
 from utils.physics import compute_pressure, compute_particle_mass_3d, compute_artificial_viscosity_3d_partial_vectorized, compute_acceleration_3d_partial_vectorized, compute_artificial_viscosity_3d_partial, compute_acceleration_3d_partial
 from utils.sph_utils import compute_smoothing_length_density_based, compute_adaptive_smoothing_length_adaptative, compute_smoothing_length_neighbors_based
 from utils.hdf5_utils import create_snapshot_file, write_to_file
@@ -25,7 +25,8 @@ def process_file(file_idx, dT, params, gamma, ASPECTRATIO, alpha, beta, extrapol
         positions_3d = np.column_stack((x, y, z))
         
         # Convert velocity components from spherical to Cartesian coordinates
-        vrlist, vphilist, vthetalist = assign_particle_velocities_from_grid_3d_partial(vphi, vr, vtheta, rlist, philist, thetalist, rmed, phimed, thetamed, start_idx, end_idx)
+        probability_matrix = calculate_velocity_probability_matrix(vphi, vr, vtheta)
+        vrlist, vphilist, vthetalist = sample_particle_velocities(probability_matrix, vphi, vr, vtheta, rlist, philist, thetalist, rmed, phimed, thetamed, start_idx, end_idx)
         vx, vy, vz = velocities_to_cartesian_3d(vrlist, vphilist, vthetalist, rlist, philist, thetalist)
         velocities = np.column_stack((vx, vy, vz))
         
