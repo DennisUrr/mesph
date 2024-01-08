@@ -195,36 +195,34 @@ def sample_particles_3d_trilineal_partial(rho, phi, theta, r, start_idx, end_idx
     :param start_idx, end_idx: Start and end indices for particle sampling in this subset.
     :return: Arrays of sampled r, phi, and theta values for the particles.
     """
-    try:
-        local_Ntot = end_idx - start_idx
+    
+    local_Ntot = end_idx - start_idx
 
-        philist = np.zeros(local_Ntot)
-        rlist = np.zeros(local_Ntot)
-        thetalist = np.zeros(local_Ntot)
+    philist = np.zeros(local_Ntot)
+    rlist = np.zeros(local_Ntot)
+    thetalist = np.zeros(local_Ntot)
 
-        N = start_idx
-        while N < end_idx:
-            #print(theta.max(), theta[-2], theta[-1])
-            _phi = np.random.uniform(phi.min(), phi[-2])
-            _r = np.random.uniform(r.min(), r.max())
-            _theta = np.random.uniform(theta.min(), theta[-2])
+    N = start_idx
+    while N < end_idx:
+        #print(theta.max(), theta[-2], theta[-1])
+        _phi = np.random.uniform(phi.min(), phi[-2])
+        _r = np.random.uniform(r.min(), r.max())
+        _theta = np.random.uniform(theta.min(), theta[-2])
 
-            # Calcula la densidad interpolada en el punto seleccionado
-            interpolated_density = trilinear_interpolation_spherical(rho, r, phi[:-1], theta[:-1], [(_theta, _r, _phi)])
-            # Decide si aceptar o rechazar la muestra basada en la densidad interpolada
-            _w = np.random.rand()
+        # Calcula la densidad interpolada en el punto seleccionado
+        interpolated_density = trilinear_interpolation_spherical(rho, r, phi[:-1], theta[:-1], [(_theta, _r, _phi)])
+        # Decide si aceptar o rechazar la muestra basada en la densidad interpolada
+        _w = np.random.rand()
 
-            if _w < interpolated_density[0]:
-                #print("Sample accepted.")
-                philist[N - start_idx] = _phi
-                rlist[N - start_idx] = _r
-                thetalist[N - start_idx] = _theta
-                N += 1
+        if _w < interpolated_density[0]:
+            #print("Sample accepted.")
+            philist[N - start_idx] = _phi
+            rlist[N - start_idx] = _r
+            thetalist[N - start_idx] = _theta
+            N += 1
 
-        return rlist, philist, thetalist
-    except Exception as e:
-        print(f"Error sampling particles: {e}")
-        raise e
+    return rlist, philist, thetalist
+    
     
 @numba.njit
 def sample_particles_3d_partial_1(rho, phi, theta, rmed, phimed, thetamed, r, start_idx, end_idx):
