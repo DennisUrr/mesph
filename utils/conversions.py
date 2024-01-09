@@ -6,21 +6,26 @@ def to_cartesian(r, theta, phi):
     z = r * np.cos(theta)
     return x, y, z
 
-def spherical_to_cartesian(r, phi, theta):
-    '''
-    Convert spherical coordinates to cartesian coordinates.
-    :param r: Radial distance
-    :param phi: Azimuthal angle
-    :param theta: Polar angle
-    :return: x, y, z coordinates in cartesian coordinates, x, y, z coordinates are bidimensional, but has the same data in each dimension
-    '''
-    R, THETA = np.meshgrid(r,theta)
-    PHI, R2 = np.meshgrid(phi,r)
-    X = np.cos(PHI)*R2
-    Y = np.sin(PHI)*R2
-    Z = R*np.cos(THETA)
-    #print("X.shape:", X.shape, "Y.shape:", Y.shape, "Z.shape:", Z.shape)
-    return X, Y, Z
+
+def to_spherical(x, y, z):
+    r = np.sqrt(x**2 + y**2 + z**2)
+    theta = np.arccos(z / r)  # Asegúrate de que r no sea 0
+    phi = np.arctan2(y, x)
+    return r, theta, phi
+
+def to_spherical_velocity(x, y, z, vx, vy, vz):
+    r = np.sqrt(x**2 + y**2 + z**2)
+    r_xy = np.sqrt(x**2 + y**2)
+
+    # Asegurarse de que no hay divisiones por cero
+    if r == 0 or r_xy == 0:
+        raise ValueError("r o r_xy es 0, lo que podría llevar a una división por cero.")
+
+    vr = (x * vx + y * vy + z * vz) / r
+    vtheta = (x * z * vx + y * z * vy - (x**2 + y**2) * vz) / (r * r_xy)
+    vphi = (-y * vx + x * vy) / r_xy
+
+    return vr, vtheta, vphi
 
 def velocities_to_cartesian_3d(vr, vphi, vtheta, rlist, philist, thetalist):
     """
