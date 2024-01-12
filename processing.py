@@ -26,7 +26,7 @@ def process_file(file_idx, dT, params, gamma, ASPECTRATIO, alpha, beta, extrapol
         
         # Convert velocity components from spherical to Cartesian coordinates
         probability_matrix = calculate_velocity_probability_matrix(vphi, vr, vtheta)
-        vrlist, vphilist, vthetalist = sample_particle_velocities(probability_matrix, vphi, vr, vtheta, rlist, philist, thetalist, rmed, phimed, thetamed, start_idx, end_idx)
+        vrlist, vphilist, vthetalist = sample_particle_velocities(probability_matrix, vphi, vr, vtheta, r, phi, theta, rmed, phimed, thetamed, start_idx, end_idx)
         vx, vy, vz = velocities_to_cartesian_3d(vrlist, vphilist, vthetalist, rlist, philist, thetalist)
         velocities = np.column_stack((vx, vy, vz))
         
