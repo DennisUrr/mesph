@@ -26,6 +26,7 @@ def sample_particles_3d_partial(rho, phi, theta, rmed, phimed, thetamed, r, star
     rlist = np.zeros(local_Ntot)
     thetalist = np.zeros(local_Ntot)
 
+    #area in the face of the plane
     phi_area = (phi.max() - phi.min()) / (len(phi) - 1)
     r_area = (r.max() - r.min()) / (len(r) - 4)  # ajuste debido a [3:-4] al cargar 'r'
     theta_area = (theta.max() - theta.min()) / (len(theta) - 1)
@@ -36,6 +37,7 @@ def sample_particles_3d_partial(rho, phi, theta, rmed, phimed, thetamed, r, star
         _r = np.random.uniform(r.min(), r.max())
         _theta = np.random.uniform(theta.min(), theta.max())
         
+        # representative point of the cell 
         iphi = min(int((_phi - phi.min()) / phi_area), len(phimed) - 1)
         ir = min(int((_r - r.min()) / r_area), len(rmed) - 1)
         itheta = min(int((_theta - theta.min()) / theta_area), len(thetamed) - 1)
@@ -88,6 +90,8 @@ def assign_particle_velocities_from_grid_3d_partial(vphi, vr, vtheta, rlist, phi
     :param start_idx, end_idx: Indices for the subset of particles to process.
     :return: Arrays of azimuthal, radial, and polar velocities for each particle in the subset.
     """
+    #basarme en el promedio de la velocidad
+    #Cada punto de la matriz es una posición de la velocidad
     local_Ntot = (end_idx - start_idx)
     particle_vphi = np.zeros(local_Ntot)
     particle_vr = np.zeros(local_Ntot)
