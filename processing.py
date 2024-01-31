@@ -64,9 +64,62 @@ def process_file(file_idx, dT, params, gamma, ASPECTRATIO, alpha, beta, extrapol
             accelerations = compute_acceleration_3d_partial(positions_3d, densities, pressures, particle_mass, h_values, viscosities)
 
         # Create snapshot file
-        create_snapshot_file(dT, file_idx, Ntot_per_file, positions_3d, velocities, masses, particle_energies, densities, h_values, accelerations, pressures, viscosities, base_filename, total_files, unique_dir, start_idx, end_idx)
+        #create_snapshot_file(dT, file_idx, Ntot_per_file, positions_3d, velocities, masses, particle_energies, densities, h_values, accelerations, pressures, viscosities, base_filename, total_files, unique_dir, start_idx, end_idx)
 
+        return dT, file_idx, Ntot_per_file, positions_3d, velocities, masses, particle_energies, densities, h_values, accelerations, pressures, viscosities, base_filename, total_files, unique_dir, start_idx, end_idx
     except Exception as e:
         print(f"Error processing file {file_idx} at time step {dT}: {e}")
         traceback.print_exc()
         raise e
+
+
+def combine_results(results):
+    """
+    Combine multiple arrays of particle properties into single arrays.
+
+    Parameters:
+    results (list of tuples): A list where each item is a tuple containing arrays of particle properties.
+
+    Returns:
+    tuple: A tuple containing combined arrays of all particle properties.
+    """
+    # Inicializa listas vacías para cada propiedad de las partículas
+    positions = []
+    velocities = []
+    masses = []
+    energies = []
+    densities = []
+    smoothing_lengths = []
+    accelerations = []
+    pressures = []
+    viscosities = []
+
+    # Itera sobre los resultados y acumula las propiedades de las partículas
+    for result in results:
+        # Suponiendo que cada result tiene la forma (pos, vel, mass, energy, density, h, accel, pressure, viscosity)
+        pos, vel, mass, energy, density, h, accel, pressure, viscosity = result
+        
+        positions.append(pos)
+        velocities.append(vel)
+        masses.append(mass)
+        energies.append(energy)
+        densities.append(density)
+        smoothing_lengths.append(h)
+        accelerations.append(accel)
+        pressures.append(pressure)
+        viscosities.append(viscosity)
+    
+    # Concatena todos los arrays para cada propiedad
+    combined_positions = np.concatenate(positions, axis=0)
+    combined_velocities = np.concatenate(velocities, axis=0)
+    combined_masses = np.concatenate(masses, axis=0)
+    combined_energies = np.concatenate(energies, axis=0)
+    combined_densities = np.concatenate(densities, axis=0)
+    combined_smoothing_lengths = np.concatenate(smoothing_lengths, axis=0)
+    combined_accelerations = np.concatenate(accelerations, axis=0)
+    combined_pressures = np.concatenate(pressures, axis=0)
+    combined_viscosities = np.concatenate(viscosities, axis=0)
+    
+    return (combined_positions, combined_velocities, combined_masses, combined_energies,
+            combined_densities, combined_smoothing_lengths, combined_accelerations,
+            combined_pressures, combined_viscosities)
