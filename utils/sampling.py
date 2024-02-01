@@ -81,40 +81,6 @@ def assign_particle_densities_from_grid_3d_partial(rho, rlist, philist, thetalis
 
     return particle_densities
 
-def assign_particle_velocities_from_grid_3d_partial(vphi, vr, vtheta, rlist, philist, thetalist, rmed, phimed, thetamed, start_idx, end_idx):
-    """
-    Assigns velocities to a subset of particles based on the 3D velocity grid from FARGO3D.
-
-    :param vphi, vr, vtheta: 3D arrays of azimuthal, radial, and polar velocities from the simulation.
-    :param rlist, philist, thetalist: Lists of coordinates for particles.
-    :param rmed, phimed, thetamed: Median values for the grid coordinates.
-    :param start_idx, end_idx: Indices for the subset of particles to process.
-    :return: Arrays of azimuthal, radial, and polar velocities for each particle in the subset.
-    """
-    #basarme en el promedio de la velocidad
-    #Cada punto de la matriz es una posición de la velocidad
-    local_Ntot = (end_idx - start_idx)
-    particle_vphi = np.zeros(local_Ntot)
-    particle_vr = np.zeros(local_Ntot)
-    particle_vtheta = np.zeros(local_Ntot)
-
-    for idx in range(local_Ntot):
-        #print("=====| idx: ", idx, " |=====")
-        r = rlist[idx]
-        phi = philist[idx]
-        theta = thetalist[idx]
-
-        iphi = int((phi - phimed.min()) / phimed.ptp() * (len(phimed) - 1))
-        ir = int((r - rmed.min()) / rmed.ptp() * (len(rmed) - 1))
-        itheta = int((theta - thetamed.min()) / thetamed.ptp() * (len(thetamed) - 1))
-
-        if 0 <= ir < len(rmed) and 0 <= iphi < len(phimed) and 0 <= itheta < len(thetamed):
-            particle_vphi[idx] = vphi[itheta, ir, iphi]
-            particle_vr[idx] = vr[itheta, ir, iphi]
-            particle_vtheta[idx] = vtheta[itheta, ir, iphi]
-
-    return particle_vphi, particle_vr, particle_vtheta
-
 def assign_particle_internal_energies_from_grid_3d_partial(rlist, philist, thetalist, grid_energies, rmed, phimed, thetamed, start_idx, end_idx):
     """
     Assigns internal energies to a subset of particles based on the 3D internal energy grid from FARGO3D.
@@ -145,8 +111,6 @@ def assign_particle_internal_energies_from_grid_3d_partial(rlist, philist, theta
     # print("Internal energy sampling completed.")
 
     return particle_energies
-
-
 
 ############################################################################################################
 ######                                      SAMPLING TRILINEAL                                      ########
@@ -270,49 +234,65 @@ def sample_particles_3d_partial_1(rho, phi, theta, rmed, phimed, thetamed, r, st
 
     return rlist, philist, thetalist
 
-def calculate_velocity_probability_matrix(vphi, vr, vtheta):
-    # Calcular la magnitud de la velocidad
-    velocity_magnitude = np.sqrt(vphi**2 + vr**2 + vtheta**2)
-    #print(velocity_magnitude.shape)
-    # Normalizar para crear una matriz de probabilidades
-    probability_matrix = velocity_magnitude / np.sum(velocity_magnitude, axis=0)
-    return probability_matrix
 
-def sample_particle_velocities(probability_matrix, vphi, vr, vtheta, r, phi, theta, rmed, phimed, thetamed, start_idx, end_idx):
+#@numba.njit
+def get_local_average(array, itheta, ir, iphi):
+    # Calcula el promedio de una propiedad en una vecindad local
+    theta_start, theta_end = max(itheta-1, 0), min(itheta+2, array.shape[0])
+    r_start, r_end = max(ir-1, 0), min(ir+2, array.shape[1])
+    phi_start, phi_end = max(iphi-1, 0), min(iphi+2, array.shape[2])
+    
+    return np.mean(array[theta_start:theta_end, r_start:r_end, phi_start:phi_end])
+
+#@numba.njit
+def sample_particles_3d_with_velocity_density(rho, phi, theta, rmed, phimed, thetamed, r, vphi, vr, vtheta, start_idx, end_idx):
     try:
         local_Ntot = end_idx - start_idx
-        sampled_vphi = np.zeros(local_Ntot)
-        sampled_vr = np.zeros(local_Ntot)
-        sampled_vtheta = np.zeros(local_Ntot)
+        sigma = rho.sum(axis=0)  # Suma a lo largo del eje de 'theta'
+        P = (sigma - sigma.min()) / sigma.ptp()
 
+        philist = np.zeros(local_Ntot)
+        rlist = np.zeros(local_Ntot)
+        thetalist = np.zeros(local_Ntot)
+        
+        vphilist = np.zeros(local_Ntot)
+        vrlist = np.zeros(local_Ntot)
+        vthetalist = np.zeros(local_Ntot)
+
+        rholist = np.zeros(local_Ntot)
+
+        #area in the face of the plane
         phi_area = (phi.max() - phi.min()) / (len(phi) - 1)
         r_area = (r.max() - r.min()) / (len(r) - 4)  # ajuste debido a [3:-4] al cargar 'r'
         theta_area = (theta.max() - theta.min()) / (len(theta) - 1)
 
-        for idx in range(local_Ntot):
-            while True:
-                #print(1)
-                # Selecciona un punto aleatorio en la cuadrícula
-                _phi = np.random.uniform(phi.min(), phi.max())
-                _r = np.random.uniform(r.min(), r.max())
-                _theta = np.random.uniform(theta.min(), theta.max())
-
-                # Calcula la probabilidad correspondiente
-                iphi = min(int((_phi - phi.min()) / phi_area), len(phimed) - 1)
-                ir = min(int((_r - r.min()) / r_area), len(rmed) - 4)
-                itheta = min(int((_theta - theta.min()) / theta_area), len(thetamed) - 1)
+        N = start_idx
+        while N < end_idx:
+            _phi = np.random.uniform(phi.min(), phi.max())
+            _r = np.random.uniform(r.min(), r.max())
+            _theta = np.random.uniform(theta.min(), theta.max())
+            
+            # representative point of the cell 
+            iphi = min(int((_phi - phi.min()) / phi_area), len(phimed) - 1)
+            ir = min(int((_r - r.min()) / r_area), len(rmed) - 4)
+            itheta = min(int((_theta - theta.min()) / theta_area), len(thetamed) - 1)
+            _w = np.random.rand()
+            
+            if _w < P[ir, iphi]:
+                philist[N - start_idx] = _phi
+                rlist[N - start_idx] = _r
+                thetalist[N - start_idx] = theta[itheta]
                 
-                prob = probability_matrix[itheta, ir, iphi]
-                #print(prob)
-                # Decide si aceptar o rechazar la muestra
-                if np.random.rand() < prob:
-                    #print("================PARTICULA ACEPTADA================")
-                    sampled_vphi[idx] = vphi[itheta, ir, iphi]
-                    sampled_vr[idx] = vr[itheta, ir, iphi]
-                    sampled_vtheta[idx] = vtheta[itheta, ir, iphi]
-                    break
+                # Ahora sampleamos las velocidades
+                # Aquí usamos los índices ir, iphi, itheta para obtener las velocidades
+                # Podemos hacer un promedio simple o ponderado de las velocidades en los puntos cercanos
+                vphilist[N - start_idx] = get_local_average(vphi, itheta, ir, iphi)
+                vrlist[N - start_idx] = get_local_average(vr, itheta, ir, iphi)
+                vthetalist[N - start_idx] = get_local_average(vtheta, itheta, ir, iphi)
+                rholist[N - start_idx] = get_local_average(rho, itheta, ir, iphi)
+                N += 1
 
-        return sampled_vphi, sampled_vr, sampled_vtheta
+        return rlist, philist, thetalist, vrlist, vphilist, vthetalist, rholist
     except Exception as e:
         print(f"Error sampling velocities: {e}")
         traceback.print_exc()
