@@ -4,15 +4,34 @@ import os
 from multiprocessing import cpu_count, Pool
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from utils.parameters import read_parameters
-from processing import process_file, combine_results
+from processing import process_file, combine_and_write_results
 from utils.hdf5_utils import create_unique_directory, copy_files_to_directory, write_to_file
 from run_splash import run_splash
 import argparse
 from tqdm import tqdm
 
-global h_mode
+def get_dT_range(mode, total_timesteps, dT_initial, dT_final):
+    if mode == 0:
+        return range(0, total_timesteps)
+    elif mode == 1:
+        return range(dT_initial, dT_initial + total_timesteps)
+    else:
+        return range(dT_initial, dT_final + 1)
+    
+def create_tasks(adjusted_dT, params, gamma, ASPECTRATIO, alpha, beta, extrapolation_mode, rho, phi, theta, r, phimed, rmed, thetamed, vphi, vr, vtheta, u, nr, ntheta, total_files, h_mode, vectorized_mode):
+    tasks = []
+    for file_idx in range(total_files):
+        subset_size = Ntot // (total_files * total_cpus)
+        Ntot_adjusted = subset_size * total_cpus * total_files
+        for proc_idx in range(total_cpus):
+            start_idx = proc_idx * subset_size + (file_idx * subset_size * total_cpus)
+            end_idx = start_idx + subset_size
+            # Crea la tarea
+            tasks.append((file_idx, adjusted_dT, params, gamma, ASPECTRATIO, alpha, beta, extrapolation_mode, Ntot_adjusted, subset_size, rho, phi, theta, r, phimed, rmed, thetamed, vphi, vr, vtheta, u, nr, ntheta, start_idx, end_idx, h_mode, vectorized_mode))
+    return tasks
 
-def main(total_cpus, output_dir, path_outputs_fargo, total_timesteps, Ntot, alpha, beta, extrapolation_mode, total_files, h_mode, vectorized_mode, args, dT_initial=None, dT_final=None):
+def main(total_cpus, output_dir, path_outputs_fargo, total_timesteps, Ntot, alpha, beta, extrapolation_mode, total_files, h_mode, vectorized_mode, mode, args, dT_initial=None, dT_final=None):
+    
     dT=str(0)
 
     global particle_mass
@@ -24,6 +43,7 @@ def main(total_cpus, output_dir, path_outputs_fargo, total_timesteps, Ntot, alph
     params = read_parameters( path_outputs_fargo + "/variables.par")
     gamma = float(params['GAMMA'])
     ASPECTRATIO = float(params['ASPECTRATIO'])
+
     Ntot_per_file = Ntot // total_files  # number of particles per file
     Ntot = Ntot_per_file * total_files  # total number of particles
 
@@ -42,32 +62,13 @@ def main(total_cpus, output_dir, path_outputs_fargo, total_timesteps, Ntot, alph
     nr   = len(rmed)
     ntheta = len(theta)
 
-    tasks = []
-    if dT_initial == None and dT_final == None:
-        for dT in range(total_timesteps):
-            dT = str(dT)
-
-            # load the gas density
-            rho = np.fromfile( path_outputs_fargo + '/gasdens' + dT + '.dat').reshape(len(theta)-1,len(r),len(phi)-1)#volume density
-            
-            # load the gas velocities
-            vphi = np.fromfile( path_outputs_fargo + '/gasvx' + dT + '.dat').reshape(len(theta)-1, len(r), len(phi)-1)
-            vr = np.fromfile( path_outputs_fargo + '/gasvy' + dT + '.dat').reshape(len(theta)-1, len(r), len(phi)-1)
-            vtheta = np.fromfile( path_outputs_fargo + '/gasvz' + dT + '.dat').reshape(len(theta)-1, len(r), len(phi)-1)
-            
-            # load the gas internal energy
-            u = np.fromfile( path_outputs_fargo + '/gasenergy' + dT + '.dat').reshape(len(theta)-1, len(r), len(phi)-1)
-            
-            # print("FARGO3D files loaded") 
-            for file_idx in range(total_files):
-                start_idx = file_idx * Ntot_per_file
-                end_idx = start_idx + Ntot_per_file if file_idx != total_files - 1 else Ntot
-                # Add a task for each file
-                tasks.append((file_idx, dT, params, gamma, ASPECTRATIO, alpha, beta, extrapolation_mode, Ntot, Ntot_per_file, rho, phi, theta, r, phimed, rmed, thetamed, vphi, vr, vtheta, u, nr, ntheta, start_idx, end_idx, unique_dir, total_files, h_mode, vectorized_mode))
+    dT_range = get_dT_range(mode, total_timesteps, dT_initial, dT_final)
     
-    elif dT_final == None:
-        
-        for dT in range(dT_initial, dT_initial+total_timesteps):
+    total_estimated_tasks = len(dT_range) * total_files
+
+    with tqdm(total=total_estimated_tasks, desc="Overall Progress") as progress_bar:
+        for idx, dT in enumerate(dT_range):
+            
             dT = str(dT)
 
             # load the gas density
@@ -82,56 +83,25 @@ def main(total_cpus, output_dir, path_outputs_fargo, total_timesteps, Ntot, alph
             u = np.fromfile( path_outputs_fargo + '/gasenergy' + dT + '.dat').reshape(len(theta)-1, len(r), len(phi)-1)
             
             # print("FARGO3D files loaded") 
-            for file_idx in range(total_files):
-                start_idx = file_idx * Ntot_per_file
-                end_idx = start_idx + Ntot_per_file if file_idx != total_files - 1 else Ntot
-                # Add a task for each file
-                tasks.append((file_idx, str(int(dT)-dT_initial), params, gamma, ASPECTRATIO, alpha, beta, extrapolation_mode, Ntot, Ntot_per_file, rho, phi, theta, r, phimed, rmed, thetamed, vphi, vr, vtheta, u, nr, ntheta, start_idx, end_idx, unique_dir, total_files, h_mode, vectorized_mode))
-    else:
-        
-        for dT in range(dT_initial, dT_final+1):
-            dT = str(dT)
 
-            # load the gas density
-            rho = np.fromfile( path_outputs_fargo + '/gasdens' + dT + '.dat').reshape(len(theta)-1,len(r),len(phi)-1)#volume density
-            
-            # load the gas velocities
-            vphi = np.fromfile( path_outputs_fargo + '/gasvx' + dT + '.dat').reshape(len(theta)-1, len(r), len(phi)-1)
-            vr = np.fromfile( path_outputs_fargo + '/gasvy' + dT + '.dat').reshape(len(theta)-1, len(r), len(phi)-1)
-            vtheta = np.fromfile( path_outputs_fargo + '/gasvz' + dT + '.dat').reshape(len(theta)-1, len(r), len(phi)-1)
-            
-            # load the gas internal energy
-            u = np.fromfile( path_outputs_fargo + '/gasenergy' + dT + '.dat').reshape(len(theta)-1, len(r), len(phi)-1)
-            
-            # print("FARGO3D files loaded") 
-            for file_idx in range(total_files):
-                start_idx = file_idx * Ntot_per_file
-                end_idx = start_idx + Ntot_per_file if file_idx != total_files - 1 else Ntot
-                # Add a task for each file
-                tasks.append((file_idx, str(int(dT)-dT_initial), params, gamma, ASPECTRATIO, alpha, beta, extrapolation_mode, Ntot, Ntot_per_file, rho, phi, theta, r, phimed, rmed, thetamed, vphi, vr, vtheta, u, nr, ntheta, start_idx, end_idx, unique_dir, total_files, h_mode, vectorized_mode))
-        #total_timesteps = dT_final - dT_initial + 1
+            # Ajusta dT según el modo
+            adjusted_dT = str(int(dT) - dT_initial) if mode != 0 else str(dT)
 
+            # Crea las tareas para cada archivo y cada subconjunto de partículas
+            output_dT = idx
+            tasks = create_tasks(adjusted_dT, params, gamma, ASPECTRATIO, alpha, beta, extrapolation_mode, rho, phi, theta, r, phimed, rmed, thetamed, vphi, vr, vtheta, u, nr, ntheta, total_files, h_mode, vectorized_mode)
+            with ProcessPoolExecutor(max_workers=total_cpus) as executor:
+                futures = [executor.submit(process_file, *task) for task in tasks]
+                all_results = [future.result() for future in as_completed(futures)]
 
-    with ProcessPoolExecutor(max_workers=total_cpus) as executor:
-        # Iniciar las tareas de procesamiento
-        future_to_cpu = {executor.submit(process_file, *task): cpu_idx for cpu_idx, task in enumerate(tasks)}
+            combine_and_write_results(all_results, unique_dir, output_dT, total_files)
+            progress_bar.update(total_files)
+    progress_bar.close()
 
-        # Diccionario para almacenar resultados acumulados por CPU
-        accumulated_results = {cpu_idx: [] for cpu_idx in range(total_cpus)}
-
-        # Recopilar resultados
-        for future in as_completed(future_to_cpu):
-            cpu_idx = future_to_cpu[future]
-            result = future.result()
-            accumulated_results[cpu_idx].append(result)
-
-        # Escribir los resultados acumulados en archivos
-        for cpu_idx, results in accumulated_results.items():
-            combined_results = combine_results(results)  # Función para combinar los resultados
-            write_to_file(dT, cpu_idx, combined_results, unique_dir, total_files)     # Función para escribir los resultados combinados en un archivo
-
-    source_files = ['outputs/splash.defaults', 'outputs/splash.limits']
+    source_files = ['outputs/splash.defaults', 'outputs/splash.limits']    
     destination_directory = unique_dir
+
+
     if not os.path.exists(destination_directory):
         print(f"El directorio {destination_directory} no existe.")
 
@@ -166,21 +136,27 @@ if __name__ == '__main__':
     # Beta parameter for artificial viscosity
     parser.add_argument('-b', '--beta', type=float, default=1, help='Beta parameter for artificial viscosity.')
     
+    # Number of files to create
     parser.add_argument('-tf', '--total_files', type=int, default=2, help='Number of files to create 0->(-tf)-1.')
 
     # Extrapolation mode
     parser.add_argument('-e', '--extrapolation', type=int, default=0, help='Extrapolation method: 0 -> probabilistic method, 1 -> trilineal cilindric interpolation, 2 -> method.')
 
+    # Initial time step to process
     parser.add_argument('-dti', '--dT_initial', type=int, default=None, help='Initial time step to process.')
     
+    # Final time step to process
     parser.add_argument('-dtf', '--dT_final', type=int, default=None, help='Final time step to process.')
 
+    # Mode to process the files
     parser.add_argument('-m', '--mode', type=int, default=0, help='Mode: 0 = 0 -> t, 1 = t_initial -> t, 2 = t_initial -> t_final.')
 
+    # Mode to compute the smoothing length
     parser.add_argument('-hm', '--smoothig_length_mode', type=int, default=0, help='Mode: 0 = density based, 1 = adaptative, 2 .')
 
+    # Mode to compute the functions
     parser.add_argument('-vm', '--vectorized_mode', type=int, default=0, help='Mode: 0 = no vectorized, 1 = vectorized.')
-    # Type of parallelization
+    
     args = parser.parse_args()
     total_cpus = args.processors
     output_dir = args.output
@@ -196,21 +172,18 @@ if __name__ == '__main__':
     mode = args.mode
     h_mode = args.smoothig_length_mode
     vectorized_mode = args.vectorized_mode
-    
-    # print(f"Total CPUs: {total_cpus}")
-    # print(f"total_files: {total_files}")
 
     if mode == 0:
         dT_initial = None
         dT_final = None
-        main(total_cpus, output_dir, path_outputs_fargo, total_timesteps, Ntot, alpha, beta, extrapolation_mode, total_files, h_mode, vectorized_mode, args)
+        main(total_cpus, output_dir, path_outputs_fargo, total_timesteps, Ntot, alpha, beta, extrapolation_mode, total_files, h_mode, vectorized_mode, mode, args)
         
     elif mode == 1:
         dT_final = None
-        main(total_cpus, output_dir, path_outputs_fargo, total_timesteps, Ntot, alpha, beta, extrapolation_mode, total_files, h_mode, vectorized_mode, args, dT_initial)
+        main(total_cpus, output_dir, path_outputs_fargo, total_timesteps, Ntot, alpha, beta, extrapolation_mode, total_files, h_mode, vectorized_mode, mode, args, dT_initial)
         
     else:
-        main(total_cpus, output_dir, path_outputs_fargo, total_timesteps, Ntot, alpha, beta, extrapolation_mode, total_files, h_mode, vectorized_mode, args, dT_initial, dT_final)
+        main(total_cpus, output_dir, path_outputs_fargo, total_timesteps, Ntot, alpha, beta, extrapolation_mode, total_files, h_mode, vectorized_mode, mode, args, dT_initial, dT_final)
         
     
     print(f"Tiempo total: {round(time.time() - init_time, 5)} segundos.")

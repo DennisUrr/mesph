@@ -129,3 +129,5 @@ dmypy.json
 .run_splash.sh
 
 .DS_Store
+
+.vscode/
