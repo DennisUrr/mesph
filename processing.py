@@ -4,9 +4,10 @@ from utils.conversions import velocities_to_cartesian_3d, to_cartesian
 from utils.sampling import sample_particles_3d_partial, assign_particle_velocities_from_grid_3d_partial, assign_particle_densities_from_grid_3d_partial, assign_particle_internal_energies_from_grid_3d_partial, sample_particles_3d_trilineal_partial, sample_particles_3d_partial_1
 from utils.physics import compute_pressure, compute_particle_mass_3d, compute_artificial_viscosity_3d_partial_vectorized, compute_acceleration_3d_partial_vectorized, compute_artificial_viscosity_3d_partial, compute_acceleration_3d_partial
 from utils.sph_utils import compute_smoothing_length_density_based, compute_adaptive_smoothing_length_adaptative, compute_smoothing_length_neighbors_based
-from utils.hdf5_utils import create_snapshot_file
+from utils.hdf5_utils import create_snapshot_file, write_to_file
 
-def process_file(file_idx, dT, params, gamma, ASPECTRATIO, alpha, beta, extrapolation_mode, Ntot, Ntot_per_file, rho, phi, theta, r, phimed, rmed, thetamed, vphi, vr, vtheta, u, nr, ntheta, start_idx, end_idx, unique_dir, total_files, h_mode, vectorized_mode, base_filename = 'snapshot_3d'): 
+
+def process_file(file_idx, dT, params, gamma, ASPECTRATIO, alpha, beta, extrapolation_mode, Ntot, Ntot_per_file, rho, phi, theta, r, phimed, rmed, thetamed, vphi, vr, vtheta, u, nr, ntheta, start_idx, end_idx, h_mode, vectorized_mode): 
     
     try:
         # Sampling the particles for the actual subset
@@ -66,14 +67,23 @@ def process_file(file_idx, dT, params, gamma, ASPECTRATIO, alpha, beta, extrapol
         # Create snapshot file
         #create_snapshot_file(dT, file_idx, Ntot_per_file, positions_3d, velocities, masses, particle_energies, densities, h_values, accelerations, pressures, viscosities, base_filename, total_files, unique_dir, start_idx, end_idx)
 
-        return dT, file_idx, Ntot_per_file, positions_3d, velocities, masses, particle_energies, densities, h_values, accelerations, pressures, viscosities, base_filename, total_files, unique_dir, start_idx, end_idx
+        #return dT, file_idx, Ntot_per_file, positions_3d, velocities, masses, particle_energies, densities, h_values, accelerations, pressures, viscosities, base_filename, total_files, unique_dir, start_idx, end_idx
+            
+        return dT, file_idx, positions_3d, velocities, masses, particle_energies, densities, h_values, accelerations, pressures, viscosities
     except Exception as e:
         print(f"Error processing file {file_idx} at time step {dT}: {e}")
         traceback.print_exc()
         raise e
+    
+def combine_and_write_results(results, unique_dir, dT, total_files):
+    # Organizar y combinar los resultados por file_idx
+    for file_idx in range(total_files):
+        file_results = [res for res in results if res[1] == file_idx]
+        combined_results = combine_subsets(file_results)
+        write_to_file(dT, file_idx, combined_results, unique_dir, total_files)
 
 
-def combine_results(results):
+def combine_subsets(results):
     """
     Combine multiple arrays of particle properties into single arrays.
 
@@ -83,43 +93,38 @@ def combine_results(results):
     Returns:
     tuple: A tuple containing combined arrays of all particle properties.
     """
+def combine_subsets(file_results):
     # Inicializa listas vacías para cada propiedad de las partículas
-    positions = []
-    velocities = []
-    masses = []
-    energies = []
-    densities = []
-    smoothing_lengths = []
-    accelerations = []
-    pressures = []
-    viscosities = []
+    combined_positions = []
+    combined_velocities = []
+    combined_masses = []
+    combined_particle_energies = []
+    combined_densities = []
+    combined_h_values = []
+    combined_accelerations = []
+    combined_pressures = []
+    combined_viscosities = []
 
-    # Itera sobre los resultados y acumula las propiedades de las partículas
-    for result in results:
-        # Suponiendo que cada result tiene la forma (pos, vel, mass, energy, density, h, accel, pressure, viscosity)
-        pos, vel, mass, energy, density, h, accel, pressure, viscosity = result
-        
-        positions.append(pos)
-        velocities.append(vel)
-        masses.append(mass)
-        energies.append(energy)
-        densities.append(density)
-        smoothing_lengths.append(h)
-        accelerations.append(accel)
-        pressures.append(pressure)
-        viscosities.append(viscosity)
-    
-    # Concatena todos los arrays para cada propiedad
-    combined_positions = np.concatenate(positions, axis=0)
-    combined_velocities = np.concatenate(velocities, axis=0)
-    combined_masses = np.concatenate(masses, axis=0)
-    combined_energies = np.concatenate(energies, axis=0)
-    combined_densities = np.concatenate(densities, axis=0)
-    combined_smoothing_lengths = np.concatenate(smoothing_lengths, axis=0)
-    combined_accelerations = np.concatenate(accelerations, axis=0)
-    combined_pressures = np.concatenate(pressures, axis=0)
-    combined_viscosities = np.concatenate(viscosities, axis=0)
-    
-    return (combined_positions, combined_velocities, combined_masses, combined_energies,
-            combined_densities, combined_smoothing_lengths, combined_accelerations,
-            combined_pressures, combined_viscosities)
+    for _, _, positions, velocities, masses, particle_energies, densities, h_values, accelerations, pressures, viscosities in file_results:
+        combined_positions.extend(positions)
+        combined_velocities.extend(velocities)
+        combined_masses.extend(masses)
+        combined_particle_energies.extend(particle_energies)
+        combined_densities.extend(densities)
+        combined_h_values.extend(h_values)
+        combined_accelerations.extend(accelerations)
+        combined_pressures.extend(pressures)
+        combined_viscosities.extend(viscosities)
+
+    # Convertir las listas en arrays de NumPy
+    combined_positions = np.array(combined_positions)
+    combined_velocities = np.array(combined_velocities)
+    combined_masses = np.array(combined_masses)
+    combined_particle_energies = np.array(combined_particle_energies)
+    combined_densities = np.array(combined_densities)
+    combined_h_values = np.array(combined_h_values)
+    combined_accelerations = np.array(combined_accelerations)
+    combined_pressures = np.array(combined_pressures)
+    combined_viscosities = np.array(combined_viscosities)
+
+    return (combined_positions, combined_velocities, combined_masses, combined_particle_energies, combined_densities, combined_h_values, combined_accelerations, combined_pressures, combined_viscosities)
