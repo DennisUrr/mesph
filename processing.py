@@ -20,7 +20,7 @@ def process_file(file_idx, dT, params, gamma, ASPECTRATIO, alpha, beta, extrapol
         # Convert spherical coordinates to Cartesian coordinates
         x, y, z = to_cartesian(rlist, philist, thetalist)
         vx, vy, vz = velocities_to_cartesian_3d(vrlist, vphilist, vthetalist, rlist, philist, thetalist)
-        positions_3d = np.column_stack((x, y, z))
+        positions_3d = np.column_stack((z, y, x))
         velocities = np.column_stack((vx, vy, vz))
         
         # Assign densities and internal energies to particles
