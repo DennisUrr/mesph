@@ -146,7 +146,7 @@
  IROTATE=T,
  IROTATEAXES=0          ,
  ANGLEX=  0.0000000000000000     ,
- ANGLEY=  270.0000000000000000     ,
+ ANGLEY=  0.0000000000000000     ,
  ANGLEZ=  0.0000000000000000     ,
  XMINROTAXES= 3*0.0000000000000000       ,
  XMAXROTAXES= 3*0.0000000000000000       ,
@@ -805,10 +805,3 @@
  XSECPOS_NOMULTI_END=  0.0000000000000000     ,
  /
 snapshot_3d_000.0.hdf5
-snapshot_3d_001.0.hdf5
-snapshot_3d_002.0.hdf5
-snapshot_3d_003.0.hdf5
-snapshot_3d_004.0.hdf5
-snapshot_3d_005.0.hdf5
-snapshot_3d_006.0.hdf5
-snapshot_3d_007.0.hdf5
