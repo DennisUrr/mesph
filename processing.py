@@ -14,12 +14,12 @@ def process_file(file_idx, dT, params, gamma, ASPECTRATIO, alpha, beta, extrapol
         if extrapolation_mode == 0:
             rlist, philist, thetalist, vrlist, vphilist, vthetalist, densities = sample_particles_3d_with_velocity_density(rho, phi, theta, rmed, phimed, thetamed, r, vphi, vr, vtheta, start_idx, end_idx)
         else:
-            x, y, z = sample_particles_3d_partial(rho, phi, theta, rmed, phimed, thetamed, r, start_idx, end_idx)
-            vx, vy, vz = interpolate_velocities(vr, vphi, vtheta, r, phi, theta, rlist, philist, thetalist)
+            rlist, philist, thetalist = sample_particles_3d_partial(rho, phi, theta, rmed, phimed, thetamed, r, start_idx, end_idx)
+            vrlist, vphilist, vthetalist = interpolate_velocities(vr, vphi, vtheta, r, phi, theta, rlist, philist, thetalist)
             densities = assign_particle_densities_from_grid_3d_partial(rho, rlist, philist, thetalist, rmed, phimed, thetamed, start_idx, end_idx)
         # Convert spherical coordinates to Cartesian coordinates
-        # x, y, z = to_cartesian(rlist, philist, thetalist)
-        # vx, vy, vz = velocities_to_cartesian_3d(vrlist, vphilist, vthetalist, rlist, philist, thetalist)
+        x, y, z = to_cartesian(rlist, philist, thetalist)
+        vx, vy, vz = velocities_to_cartesian_3d(vrlist, vphilist, vthetalist, rlist, philist, thetalist)
         positions_3d = np.column_stack((x, y, z))
         velocities = np.column_stack((vx, vy, vz))
         

@@ -1,4 +1,3 @@
-import trilinear
 import numpy as np
 from scipy.interpolate import RegularGridInterpolator
 import numba
