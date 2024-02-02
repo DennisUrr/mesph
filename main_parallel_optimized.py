@@ -10,6 +10,7 @@ from run_splash import run_splash
 import argparse
 from tqdm import tqdm
 
+
 def get_dT_range(mode, total_timesteps, dT_initial, dT_final):
     if mode == 0:
         return range(0, total_timesteps)
