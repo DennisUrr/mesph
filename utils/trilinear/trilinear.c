@@ -161,6 +161,19 @@ static PyMethodDef TrilinearMethods[] = {
   {NULL, NULL, 0, NULL}
 };
 
-PyMODINIT_FUNC inittrilinear(void) {
-  (void) Py_InitModule("trilinear", TrilinearMethods);
+static struct PyModuleDef trilinearmodule = {
+    PyModuleDef_HEAD_INIT,
+    "trilinear",  // nombre del módulo
+    NULL,  // Documentación del módulo, puede ser NULL
+    -1,  // Tamaño del módulo, o -1 si el módulo mantiene estado en variables globales
+    TrilinearMethods  // Métodos del módulo
+};
+
+// PyMODINIT_FUNC inittrilinear(void) {
+//   (void) Py_InitModule("trilinear", TrilinearMethods);
+// }
+
+PyMODINIT_FUNC PyInit_trilinear(void) {
+    import_array();  // Necesario para inicializar las API de C de NumPy
+    return PyModule_Create(&trilinearmodule);
 }

@@ -65,9 +65,7 @@ def gradient_gaussian_kernel(r, h):
     return result
 
 
-
-
-def compute_smoothing_length_density_based(masses, densities, eta=1.3, dimension=3):
+def compute_smoothing_length_density_based(masses, densities, eta=1.2, dimension=3):
     
     """
     Computes the adaptive smoothing length in 3D based on local density for SPH simulations.

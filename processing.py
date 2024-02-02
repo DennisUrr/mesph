@@ -1,10 +1,10 @@
 import numpy as np
 import traceback
 from utils.conversions import velocities_to_cartesian_3d, to_cartesian
-from utils.sampling import assign_particle_internal_energies_from_grid_3d_partial, sample_particles_3d_trilineal_partial, sample_particles_3d_with_velocity_density
+from utils.sampling import assign_particle_internal_energies_from_grid_3d_partial, assign_particle_densities_from_grid_3d_partial, sample_particles_3d_trilineal_partial, sample_particles_3d_with_velocity_density, interpolate_velocities, sample_particles_3d_partial
 from utils.physics import compute_pressure, compute_particle_mass_3d, compute_artificial_viscosity_3d_partial_vectorized, compute_acceleration_3d_partial_vectorized, compute_artificial_viscosity_3d_partial, compute_acceleration_3d_partial
 from utils.sph_utils import compute_smoothing_length_density_based, compute_adaptive_smoothing_length_adaptative, compute_smoothing_length_neighbors_based
-from utils.hdf5_utils import create_snapshot_file, write_to_file
+from utils.hdf5_utils import write_to_file
 
 
 def process_file(file_idx, dT, params, gamma, ASPECTRATIO, alpha, beta, extrapolation_mode, Ntot, Ntot_per_file, rho, phi, theta, r, phimed, rmed, thetamed, vphi, vr, vtheta, u, nr, ntheta, start_idx, end_idx, h_mode, vectorized_mode): 
@@ -13,19 +13,18 @@ def process_file(file_idx, dT, params, gamma, ASPECTRATIO, alpha, beta, extrapol
         # Sampling the particles for the actual subset
         if extrapolation_mode == 0:
             rlist, philist, thetalist, vrlist, vphilist, vthetalist, densities = sample_particles_3d_with_velocity_density(rho, phi, theta, rmed, phimed, thetamed, r, vphi, vr, vtheta, start_idx, end_idx)
-        elif extrapolation_mode == 1:
-            rlist, philist, thetalist, vrlist, vphilist, vthetalist = sample_particles_3d_trilineal_partial(rho, phi, theta, r, start_idx, end_idx)
         else:
-            rlist, philist, thetalist, vrlist, vphilist, vthetalist = sample_particles_3d_with_velocity(rho, phi, theta, rmed, phimed, thetamed, r, vphi, vr, vtheta, start_idx, end_idx)
-        
+            x, y, z = sample_particles_3d_partial(rho, phi, theta, rmed, phimed, thetamed, r, start_idx, end_idx)
+            vx, vy, vz = interpolate_velocities(vr, vphi, vtheta, r, phi, theta, rlist, philist, thetalist)
+            densities = assign_particle_densities_from_grid_3d_partial(rho, rlist, philist, thetalist, rmed, phimed, thetamed, start_idx, end_idx)
         # Convert spherical coordinates to Cartesian coordinates
-        x, y, z = to_cartesian(rlist, philist, thetalist)
-        vx, vy, vz = velocities_to_cartesian_3d(vrlist, vphilist, vthetalist, rlist, philist, thetalist)
+        # x, y, z = to_cartesian(rlist, philist, thetalist)
+        # vx, vy, vz = velocities_to_cartesian_3d(vrlist, vphilist, vthetalist, rlist, philist, thetalist)
         positions_3d = np.column_stack((x, y, z))
         velocities = np.column_stack((vx, vy, vz))
         
         # Assign densities and internal energies to particles
-        # = assign_particle_densities_from_grid_3d_partial(rho, rlist, philist, thetalist, rmed, phimed, thetamed, start_idx, end_idx)
+        # = 
         particle_energies = assign_particle_internal_energies_from_grid_3d_partial(rlist, philist, thetalist, u, rmed, phimed, thetamed, start_idx, end_idx)
 
 
