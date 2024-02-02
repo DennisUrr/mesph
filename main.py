@@ -1,184 +1,193 @@
 import time
 import numpy as np
 import os
-from multiprocessing import cpu_count
+from multiprocessing import cpu_count, Pool
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from utils.parameters import read_parameters
-from utils.conversions import to_cartesian_3d, velocities_to_cartesian_3d
-from utils.sampling import sample_particles_3d_partial, assign_particle_velocities_from_grid_3d_partial, assign_particle_densities_from_grid_3d_partial, assign_particle_internal_energies_from_grid_3d_partial, sample_particles_3d_interpolated
-from utils.physics import compute_pressure, compute_acceleration_3d_partial, compute_artificial_viscosity_3d_partial, compute_particle_mass_3d
-from utils.sph_utils import compute_smoothing_length_3d
-from utils.hdf5_utils import create_snapshot_file, create_unique_directory, copy_files_to_directory
-
-from tqdm import tqdm
+from processing import process_file, combine_and_write_results
+from utils.hdf5_utils import create_unique_directory, copy_files_to_directory, write_to_file
+from run_splash import run_splash
 import argparse
+from tqdm import tqdm
 
 
-def main():
+def get_dT_range(mode, total_timesteps, dT_initial, dT_final):
+    if mode == 0:
+        return range(0, total_timesteps)
+    elif mode == 1:
+        return range(dT_initial, dT_initial + total_timesteps)
+    else:
+        return range(dT_initial, dT_final + 1)
+    
+def create_tasks(adjusted_dT, params, gamma, ASPECTRATIO, alpha, beta, extrapolation_mode, rho, phi, theta, r, phimed, rmed, thetamed, vphi, vr, vtheta, u, nr, ntheta, total_files, h_mode, vectorized_mode):
+    tasks = []
+    for file_idx in range(total_files):
+        subset_size = Ntot // (total_files * total_cpus)
+        Ntot_adjusted = subset_size * total_cpus * total_files
+        for proc_idx in range(total_cpus):
+            start_idx = proc_idx * subset_size + (file_idx * subset_size * total_cpus)
+            end_idx = start_idx + subset_size
+            # Crea la tarea
+            tasks.append((file_idx, adjusted_dT, params, gamma, ASPECTRATIO, alpha, beta, extrapolation_mode, Ntot_adjusted, subset_size, rho, phi, theta, r, phimed, rmed, thetamed, vphi, vr, vtheta, u, nr, ntheta, start_idx, end_idx, h_mode, vectorized_mode))
+    return tasks
+
+def main(total_cpus, output_dir, path_outputs_fargo, total_timesteps, Ntot, alpha, beta, extrapolation_mode, total_files, h_mode, vectorized_mode, mode, args, dT_initial=None, dT_final=None):
+    
     dT=str(0)
 
     global particle_mass
-    global total_timesteps
-    global params, gamma, ASPECTRATIO, alpha, beta, epsilon, total_cpus, Ntot, Ntot_per_file, phi, r, theta, phimed, rmed, thetamed, nphi, nr, ntheta
+    global params, gamma, ASPECTRATIO, Ntot_per_file, phi, r, theta, phimed, rmed, thetamed, nphi, nr, ntheta
 
-    path_outputs_fargo = '../FARGO3D/public/outputs/p3disof/'
-    output_dir = 'outputs/snapshot'
-    unique_dir = create_unique_directory(output_dir)
-    total_timesteps = 2  # Cambiar según tus datos
-    Ntot = 20000  # Número total de partículas
+    unique_dir = create_unique_directory(output_dir, args)
+    print(f"Unique directory created: {unique_dir}")
 
     params = read_parameters( path_outputs_fargo + "/variables.par")
     gamma = float(params['GAMMA'])
     ASPECTRATIO = float(params['ASPECTRATIO'])
-    alpha = 0.6
-    beta = 1
-    epsilon = 1e-5
-    total_cpus = 2
-    Ntot_per_file = Ntot // total_cpus  # Número de partículas por archivo
-    base_filename = 'snapshot_3d'
 
-    # Carga el dominio angular y radial de FARGO3D
+    Ntot_per_file = Ntot // total_files  # number of particles per file
+    Ntot = Ntot_per_file * total_files  # total number of particles
+
+    # load the domain of the FARGO3D simulation
     phi = np.loadtxt( path_outputs_fargo + "/domain_x.dat")
     r = np.loadtxt( path_outputs_fargo + "domain_y.dat")[3:-4]
     theta = np.loadtxt( path_outputs_fargo + "domain_z.dat")[3:-3]
 
-
-    # Calcula los puntos medios para el ángulo y el radio
+    # compute the midpoints for the angle and radius
     phimed = 0.5*(phi[1:]+phi[:-1])
     rmed   = 0.5*(r[1:]+r[:-1])
     thetamed = 0.5*(theta[1:]+theta[:-1])
 
-    # Tamaños de las matrices para phi y r
+    # lens fot phi, r and theta
     nphi = len(phimed)
     nr   = len(rmed)
     ntheta = len(theta)
 
+    dT_range = get_dT_range(mode, total_timesteps, dT_initial, dT_final)
+    
+    total_estimated_tasks = len(dT_range) * total_files
 
-    for dT in tqdm(range(total_timesteps), desc='Progreso total de pasos de tiempo'):
-        dT = str(dT)
-        start_time = time.time()
-        # Aquí necesitas cargar o calcular los datos para cada paso de tiempo
-        # Carga la densidad del gas
-        rho = np.fromfile( path_outputs_fargo + '/gasdens' + dT + '.dat').reshape(len(theta)-1,len(r),len(phi)-1)#volume density
-
-        # Carga las velocidades del gas
-
-        vphi = np.fromfile( path_outputs_fargo + '/gasvx' + dT + '.dat').reshape(len(theta)-1, len(r), len(phi)-1)
-        vr = np.fromfile( path_outputs_fargo + '/gasvy' + dT + '.dat').reshape(len(theta)-1, len(r), len(phi)-1)
-        vtheta = np.fromfile( path_outputs_fargo + '/gasvz' + dT + '.dat').reshape(len(theta)-1, len(r), len(phi)-1)
-
-        print("vphi.shape: ", vphi.shape)
-        print("vr.shape: ", vr.shape)
-        print("vtheta.shape: ", vtheta.shape)
-
-        # Cargar las energías internas del gas en 3D
-        u = np.fromfile( path_outputs_fargo + '/gasenergy' + dT + '.dat').reshape(len(theta)-1, len(r), len(phi)-1)
-
-        print("Cargando datos de FARGO3D...")
-        print(f"tomó {round(time.time() - start_time, 5)} segundos.")
-
-        for file_idx in tqdm(range(total_cpus), desc=f'Procesando archivos para el tiempo {dT}', leave=False):
-            start_idx = file_idx * Ntot_per_file
-            end_idx = start_idx + Ntot_per_file
-            if file_idx == total_cpus - 1:  # Ajustar para el último archivo
-                end_idx = Ntot
-                    
-            print("==============================================================")
-            print("#####                    TIEMPO = " + dT + "                       #####")
-            print("#####                    ARCHIVO = " + str(file_idx) + "                      #####")
-            print("==============================================================")
+    with tqdm(total=total_estimated_tasks, desc="Overall Progress") as progress_bar:
+        for idx, dT in enumerate(dT_range):
             
-            start_time = time.time()
+            dT = str(dT)
 
-            # 1. Muestrear partículas
-            # Muestrear partículas para el subconjunto actual
-            #rlist, philist, thetalist = sample_particles_3d_partial(rho, phi, theta, rmed, phimed, thetamed, r, start_idx, end_idx)
-            rlist, philist, thetalist = sample_particles_3d_interpolated(rho, rmed, phimed, thetamed, start_idx, end_idx)
-
-            # # Convertir posiciones de las partículas a coordenadas cartesianas 3D
-            x, y, z = to_cartesian_3d(rlist, philist, thetalist)
-            positions_3d = np.column_stack((x, y, z))
-
-            print("Muestreo de partículas completado.")
-            print(f"tomó {round(time.time() - start_time, 5)} segundos.")
+            # load the gas density
+            rho = np.fromfile( path_outputs_fargo + '/gasdens' + dT + '.dat').reshape(len(theta)-1,len(r),len(phi)-1)#volume density
             
-            # Convertir velocidades de polares a cartesianas
-            start_time = time.time()
-            vrlist, vphilist, vthetalist = assign_particle_velocities_from_grid_3d_partial(vphi, vr, vtheta, rlist, philist, thetalist, rmed, phimed, thetamed, start_idx, end_idx)
-            print("vrlist.shape: ", vrlist.shape)
-            print("vphilist.shape: ", vphilist.shape)
-            print("vthetalist.shape: ", vthetalist.shape)
-            vx, vy, vz = velocities_to_cartesian_3d(vrlist, vphilist, vthetalist, rlist, philist, thetalist)
-            velocities = np.column_stack((vx, vy, vz))
-            print("Velocidades de partículas asignadas.")
-            print(f"tomó {round(time.time() - start_time, 5)} segundos.")
+            # load the gas velocities
+            vphi = np.fromfile( path_outputs_fargo + '/gasvx' + dT + '.dat').reshape(len(theta)-1, len(r), len(phi)-1)
+            vr = np.fromfile( path_outputs_fargo + '/gasvy' + dT + '.dat').reshape(len(theta)-1, len(r), len(phi)-1)
+            vtheta = np.fromfile( path_outputs_fargo + '/gasvz' + dT + '.dat').reshape(len(theta)-1, len(r), len(phi)-1)
+            
+            # load the gas internal energy
+            u = np.fromfile( path_outputs_fargo + '/gasenergy' + dT + '.dat').reshape(len(theta)-1, len(r), len(phi)-1)
+            
+            # print("FARGO3D files loaded") 
 
-            # 2. Asignar propiedades a las partículas
-            start_time = time.time()
-            densities = assign_particle_densities_from_grid_3d_partial(rho, rlist, philist, thetalist, rmed, phimed, thetamed, start_idx, end_idx)
-            particle_energies = assign_particle_internal_energies_from_grid_3d_partial(rlist, philist, thetalist, u, rmed, phimed, thetamed, start_idx, end_idx)
-            print("Densidades de partículas asignadas.")
-            print("Dimensión densities: ", densities.shape)
-            print(f"tomó {round(time.time() - start_time, 5)} segundos.")
+            # Ajusta dT según el modo
+            adjusted_dT = str(int(dT) - dT_initial) if mode != 0 else str(dT)
+
+            # Crea las tareas para cada archivo y cada subconjunto de partículas
+            output_dT = idx
+            tasks = create_tasks(adjusted_dT, params, gamma, ASPECTRATIO, alpha, beta, extrapolation_mode, rho, phi, theta, r, phimed, rmed, thetamed, vphi, vr, vtheta, u, nr, ntheta, total_files, h_mode, vectorized_mode)
+            with ProcessPoolExecutor(max_workers=total_cpus) as executor:
+                futures = [executor.submit(process_file, *task) for task in tasks]
+                all_results = [future.result() for future in as_completed(futures)]
+
+            combine_and_write_results(all_results, unique_dir, output_dT, total_files)
+            progress_bar.update(total_files)
+    progress_bar.close()
+
+    source_files = ['outputs/splash.defaults', 'outputs/splash.limits']    
+    destination_directory = unique_dir
 
 
-            # 3. Calcular masa de las partículas
-            start_time = time.time()
-            particle_mass = compute_particle_mass_3d(nr, ntheta, rho, ASPECTRATIO, params, Ntot)
-            masses = np.full(Ntot_per_file, particle_mass, dtype=np.float32)
-            print("Masas de partículas asignadas.")
-            print("Dimensión masses: ", masses.shape)
-            print(f"tomó {round(time.time() - start_time, 5)} segundos.")
-
-            # # Calcular la presión de las partículas
-            start_time = time.time()
-            pressures = compute_pressure(densities, particle_energies, gamma)
-            print("Presiones de partículas asignadas.")
-            print(f"tomó {round(time.time() - start_time, 5)} segundos.")
-
-            # 4. Calcular longitud de suavizado adaptativa
-            h_values = compute_smoothing_length_3d(masses, densities)
-            print("Longitudes de suavizado adaptativas calculadas.")
-            print(f"tomó {round(time.time() - start_time, 5)} segundos.")
-
-            # 5. Calcular viscosidad artificial
-            start_time = time.time()
-            viscosities = compute_artificial_viscosity_3d_partial(positions_3d, vx, vy, vz, densities, particle_energies, h_values, alpha, beta)
-            print("Viscosidades de partículas calculadas.")
-            print(f"tomó {round(time.time() - start_time, 5)} segundos.")
-            # 6. Calcular aceleración
-            start_time = time.time()
-            accelerations = compute_acceleration_3d_partial(positions_3d, densities, pressures, particle_mass, h_values, viscosities)
-            print("Aceleraciones de partículas calculadas.")
-            print(f"tomó {round(time.time() - start_time, 5)} segundos.")
-
-            ids = np.arange(start_idx, end_idx, dtype=np.int32)
-            start_time = time.time()
-            create_snapshot_file(dT, file_idx, Ntot_per_file, positions_3d, velocities, ids, masses, particle_energies, densities, h_values, accelerations, pressures, viscosities, base_filename, total_cpus, unique_dir)
-            print("Archivo HDF5 creado.")
-            print(f"tomó {round(time.time() - start_time, 5)} segundos.")
-
-    source_files = [
-    'outputs/splash.defaults',  
-    'outputs/splash.limits'   
-    ]
-
-    destination_directory = 'outputs/' + unique_dir
-
-    # Asegúrate de que el directorio destino existe
     if not os.path.exists(destination_directory):
         print(f"El directorio {destination_directory} no existe.")
 
-    # Copia los archivos
     copy_files_to_directory(source_files, destination_directory)
+    run_splash(total_timesteps, unique_dir)
 
 if __name__ == '__main__':
-    
 
     init_time = time.time()
-    main()
+
+    # Create an argument parser
+    parser = argparse.ArgumentParser(description='Parallel particle processing for astrophysical simulations.')
+    
+    # Number of processors to be used for parallel processing
+    parser.add_argument('-p', '--processors', type=int, default=2, help='Number of processors to use for parallel processing.')
+    
+    # Output directory for the generated HDF5 files
+    parser.add_argument('-o', '--output', type=str, default='outputs/snapshot', help='Output directory for the generated HDF5 files.')
+    
+    # Directory containing FARGO3D output files
+    parser.add_argument('-of', '--output_fargo', type=str, default='../FARGO3D/public/outputs/p3disof/', help='Directory containing FARGO3D output files.')
+    
+    # Number of time steps to process
+    parser.add_argument('-t', '--times', type=int, default=1, help='Number of time steps to process.')
+
+    # Number of particles to transform
+    parser.add_argument('-n', '--particles', type=int, default=10000, help='Number of particles to transform.')
+
+    # Alpha parameter for artificial viscosity
+    parser.add_argument('-a', '--alpha', type=float, default=0.6, help='Alpha parameter for artificial viscosity.')
+    
+    # Beta parameter for artificial viscosity
+    parser.add_argument('-b', '--beta', type=float, default=1, help='Beta parameter for artificial viscosity.')
+    
+    # Number of files to create
+    parser.add_argument('-tf', '--total_files', type=int, default=2, help='Number of files to create 0->(-tf)-1.')
+
+    # Extrapolation mode
+    parser.add_argument('-e', '--extrapolation', type=int, default=0, help='Extrapolation method: 0 -> probabilistic method, 1 -> trilineal cilindric interpolation, 2 -> method.')
+
+    # Initial time step to process
+    parser.add_argument('-dti', '--dT_initial', type=int, default=None, help='Initial time step to process.')
+    
+    # Final time step to process
+    parser.add_argument('-dtf', '--dT_final', type=int, default=None, help='Final time step to process.')
+
+    # Mode to process the files
+    parser.add_argument('-m', '--mode', type=int, default=0, help='Mode: 0 = 0 -> t, 1 = t_initial -> t, 2 = t_initial -> t_final.')
+
+    # Mode to compute the smoothing length
+    parser.add_argument('-hm', '--smoothig_length_mode', type=int, default=0, help='Mode: 0 = density based, 1 = adaptative, 2 .')
+
+    # Mode to compute the functions
+    parser.add_argument('-vm', '--vectorized_mode', type=int, default=0, help='Mode: 0 = no vectorized, 1 = vectorized.')
+    
+    args = parser.parse_args()
+    total_cpus = args.processors
+    output_dir = args.output
+    path_outputs_fargo = args.output_fargo
+    total_timesteps = args.times
+    Ntot = args.particles
+    alpha = args.alpha
+    beta = args.beta
+    extrapolation_mode = args.extrapolation
+    total_files = int(args.total_files)
+    dT_initial = args.dT_initial
+    dT_final = args.dT_final
+    mode = args.mode
+    h_mode = args.smoothig_length_mode
+    vectorized_mode = args.vectorized_mode
+
+    if mode == 0:
+        dT_initial = None
+        dT_final = None
+        main(total_cpus, output_dir, path_outputs_fargo, total_timesteps, Ntot, alpha, beta, extrapolation_mode, total_files, h_mode, vectorized_mode, mode, args)
+        
+    elif mode == 1:
+        dT_final = None
+        main(total_cpus, output_dir, path_outputs_fargo, total_timesteps, Ntot, alpha, beta, extrapolation_mode, total_files, h_mode, vectorized_mode, mode, args, dT_initial)
+        
+    else:
+        main(total_cpus, output_dir, path_outputs_fargo, total_timesteps, Ntot, alpha, beta, extrapolation_mode, total_files, h_mode, vectorized_mode, mode, args, dT_initial, dT_final)
+        
+    
     print(f"Tiempo total: {round(time.time() - init_time, 5)} segundos.")
-    
 
 
-
-    
+        
