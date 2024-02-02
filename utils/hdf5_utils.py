@@ -4,20 +4,50 @@ import shutil
 from math import pi
 import numpy as np
 
-def create_unique_directory(base_path):
+
+def create_unique_directory(base_path, args):
     """
-    Creates a unique directory. If the base directory already exists, it creates a new one with an incremental index.
+    Creates a unique directory with specified abbreviated arguments in its name. 
+    If the base directory already exists, it creates a new one with an incremental index.
     :param base_path: The base path of the directory to be created.
+    :param args: Arguments to be included in the directory name.
     :return: The path of the created directory.
     """
+
+    # Mapeo de argumentos a sus abreviaturas
+    arg_map = {
+        'processors': 'p',
+        'particles': 'n',
+        'alpha': 'a',
+        'beta': 'b',
+        'extrapolation': 'e',
+        'total_files': 'tf',
+        'dT_initial': 'dti',
+        'dT_final': 'dtf',
+        'mode': 'm',
+        'smoothig_length_mode': 'hm',
+        'vectorized_mode': 'vm'
+    }
+
+    # Función para crear una cadena con las abreviaturas de los argumentos
+    def create_arg_string(args):
+        arg_items = vars(args).items()
+        return '_'.join(f"{arg_map.get(key, key)}{value}" for key, value in arg_items if value is not None and key in arg_map)
+
+    # Incluye los argumentos en el nombre del directorio
+    arg_str = create_arg_string(args)
+    base_path_with_args = f"{base_path}_{arg_str}"
+    
     counter = 0
-    new_path = base_path
+    new_path = base_path_with_args
     while os.path.exists(new_path):
         counter += 1
-        new_path = f"{base_path}_{counter}"
+        new_path = f"{base_path_with_args}_{counter}"
     
     os.makedirs(new_path)
     return new_path
+
+
 
 def create_snapshot_file(dT, file_idx, Ntot, positions_3d, velocities, masses, particle_energies, densities, h_values, accelerations, pressures, viscosities, base_filename, total_files, unique_dir, start_idx, end_idx):
     """
@@ -79,3 +109,51 @@ def copy_files_to_directory(source_files, destination_directory):
             shutil.copy(file, destination_directory)
         else:
             print(f"The file {file} does not exist and cannot be copied.")
+
+
+def write_to_file(dT, file_idx, combined_results, unique_dir, total_files, base_filename="snapshot_3d"):
+    """
+    Writes the combined results of particle properties processed by a CPU into a single HDF5 file.
+
+    :param dT: Time step of the snapshot.
+    :param file_idx: File index for the current snapshot part.
+    :param combined_results: A tuple containing combined arrays of all particle properties.
+    :param base_filename: The base name for the snapshot files.
+    :param unique_dir: The directory where the snapshot file will be saved.
+    """
+    # Desempaquetar los resultados combinados
+    positions, velocities, masses, energies, densities, h_values, accelerations, pressures, viscosities = combined_results
+
+    
+    # Calcular el número total de partículas
+    Ntot = positions.shape[0]
+    # Calcular los IDs de las partículas
+    ids = np.arange(Ntot, dtype=np.int32)
+
+    # Definir el nombre completo del archivo con la ruta al directorio único
+    filename = os.path.join(unique_dir, f'{base_filename}_{int(dT):03d}.{file_idx}.hdf5')
+
+    with h5py.File(filename, 'w') as f:
+        # Create the Header group and set attributes
+        header = f.create_group("/Header")
+        header.attrs['NumPart_ThisFile'] = [Ntot, 0, 0, 0, 0, 0]
+        header.attrs['NumPart_Total'] = [Ntot * total_files, 0, 0, 0, 0, 0]  # Ntot * total_files is the total number of particles across all files
+        header.attrs['NumPart_Total_HighWord'] = [0, 0, 0, 0, 0, 0]
+        header.attrs['MassTable'] = [0, 0, 0, 0, 0, 0]
+        header.attrs['Time'] = int(dT)*pi
+        header.attrs['Redshift'] = 0
+        header.attrs["NumFilesPerSnapshot"] = total_files
+        header.attrs["Dimension"] = 3
+
+        # Create the PartType0 group and add datasets
+        pt0 = f.create_group("/PartType0") # GAS
+        pt0.create_dataset("Coordinates", data=positions)
+        pt0.create_dataset("Velocities", data=velocities)
+        pt0.create_dataset("ParticleIDs", data=ids)
+        pt0.create_dataset("Masses", data=masses)
+        pt0.create_dataset("InternalEnergy", data=energies)
+        pt0.create_dataset("Density", data=densities)
+        pt0.create_dataset("SmoothingLength", data=h_values)
+        pt0.create_dataset("Acceleration", data=accelerations)
+        pt0.create_dataset("Pressure", data=pressures)
+        pt0.create_dataset("Viscosity", data=viscosities)
