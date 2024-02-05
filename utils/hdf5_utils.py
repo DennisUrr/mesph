@@ -26,7 +26,8 @@ def create_unique_directory(base_path, args):
         'dT_final': 'dtf',
         'mode': 'm',
         'smoothig_length_mode': 'hm',
-        'vectorized_mode': 'vm'
+        'vectorized_mode': 'vm',
+        'dust_mode': 'dm'
     }
 
     # Función para crear una cadena con las abreviaturas de los argumentos
@@ -157,3 +158,47 @@ def write_to_file(dT, file_idx, combined_results, unique_dir, total_files, base_
         pt0.create_dataset("Acceleration", data=accelerations)
         pt0.create_dataset("Pressure", data=pressures)
         pt0.create_dataset("Viscosity", data=viscosities)
+
+def write_to_file_dust(dT, file_idx, combined_results, unique_dir, total_files, base_filename="snapshot_3d"):
+    """
+    Writes the combined results of particle properties processed by a CPU into a single HDF5 file.
+
+    :param dT: Time step of the snapshot.
+    :param file_idx: File index for the current snapshot part.
+    :param combined_results: A tuple containing combined arrays of all particle properties.
+    :param base_filename: The base name for the snapshot files.
+    :param unique_dir: The directory where the snapshot file will be saved.
+    """
+    # Desempaquetar los resultados combinados
+    positions, velocities, masses, densities, h_values = combined_results
+
+    
+    # Calcular el número total de partículas
+    Ntot = positions.shape[0]
+    # Calcular los IDs de las partículas
+    ids = np.arange(Ntot, dtype=np.int32)
+
+    # Definir el nombre completo del archivo con la ruta al directorio único
+    filename = os.path.join(unique_dir, f'{base_filename}_dust3d_{int(dT):03d}.{file_idx}.hdf5')
+
+    with h5py.File(filename, 'w') as f:
+        # Create the Header group and set attributes
+        header = f.create_group("/Header")
+        header.attrs['NumPart_ThisFile'] = [Ntot, 0, 0, 0, 0, 0]
+        header.attrs['NumPart_Total'] = [Ntot * total_files, 0, 0, 0, 0, 0]  # Ntot * total_files is the total number of particles across all files
+        header.attrs['NumPart_Total_HighWord'] = [0, 0, 0, 0, 0, 0]
+        header.attrs['MassTable'] = [0, 0, 0, 0, 0, 0]
+        header.attrs['Time'] = int(dT)*pi
+        header.attrs['Redshift'] = 0
+        header.attrs["NumFilesPerSnapshot"] = total_files
+        header.attrs["Dimension"] = 3
+
+        # Create the PartType0 group and add datasets
+        pt0 = f.create_group("/PartType0") # Dust
+        pt0.create_dataset("Coordinates", data=positions)
+        pt0.create_dataset("Velocities", data=velocities)
+        pt0.create_dataset("ParticleIDs", data=ids)
+        pt0.create_dataset("Masses", data=masses)
+        pt0.create_dataset("Density", data=densities)
+        pt0.create_dataset("SmoothingLength", data=h_values)
+        

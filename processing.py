@@ -4,10 +4,10 @@ from utils.conversions import velocities_to_cartesian_3d, to_cartesian
 from utils.sampling import assign_particle_internal_energies_from_grid_3d_partial, assign_particle_densities_from_grid_3d_partial, sample_particles_3d_trilineal_partial, sample_particles_3d_with_velocity_density, interpolate_velocities, sample_particles_3d_partial
 from utils.physics import compute_pressure, compute_particle_mass_3d, compute_artificial_viscosity_3d_partial_vectorized, compute_acceleration_3d_partial_vectorized, compute_artificial_viscosity_3d_partial, compute_acceleration_3d_partial
 from utils.sph_utils import compute_smoothing_length_density_based, compute_adaptive_smoothing_length_adaptative, compute_smoothing_length_neighbors_based
-from utils.hdf5_utils import write_to_file
+from utils.hdf5_utils import write_to_file, write_to_file_dust
 
 
-def process_file(file_idx, dT, params, gamma, ASPECTRATIO, alpha, beta, extrapolation_mode, Ntot, Ntot_per_file, rho, phi, theta, r, phimed, rmed, thetamed, vphi, vr, vtheta, u, nr, ntheta, start_idx, end_idx, h_mode, vectorized_mode): 
+def process_file(file_idx, dT, params, gamma, ASPECTRATIO, alpha, beta, extrapolation_mode, Ntot, Ntot_per_file, rho, phi, theta, r, phimed, rmed, thetamed, vphi, vr, vtheta, u, nr, ntheta, start_idx, end_idx, h_mode, vectorized_mode, dust_mode, rho_dust=None, vr_dust=None, vphi_dust=None, vtheta_dust=None): 
     
     try:
         # Sampling the particles for the actual subset
@@ -55,19 +55,39 @@ def process_file(file_idx, dT, params, gamma, ASPECTRATIO, alpha, beta, extrapol
             # Compute accelerations
             accelerations = compute_acceleration_3d_partial(positions_3d, densities, pressures, particle_mass, h_values, viscosities)
 
-        return dT, file_idx, positions_3d, velocities, masses, particle_energies, densities, h_values, accelerations, pressures, viscosities
+        if dust_mode==1:
+            rlist_dust, philist_dust, thetalist_dust = sample_particles_3d_partial(rho_dust, phi, theta, rmed, phimed, thetamed, r, start_idx, end_idx)
+            vrlist_dust, vphilist_dust, vthetalist_dust = interpolate_velocities(vr_dust, vphi_dust, vtheta_dust, r, phi, theta, rlist_dust, philist_dust, thetalist_dust)
+            densities_dust = assign_particle_densities_from_grid_3d_partial(rho_dust, rlist_dust, philist_dust, thetalist_dust, rmed, phimed, thetamed, start_idx, end_idx)
+            x_dust, y_dust, z_dust = to_cartesian(rlist_dust, philist_dust, thetalist_dust)
+            vx_dust, vy_dust, vz_dust = velocities_to_cartesian_3d(vrlist_dust, vphilist_dust, vthetalist_dust, rlist_dust, philist_dust, thetalist_dust)
+            positions_3d_dust = np.column_stack((z_dust, y_dust, x_dust))
+            velocities_dust = np.column_stack((vx_dust, vy_dust, vz_dust))
+            return positions_3d, velocities, masses, particle_energies, densities, h_values, accelerations, pressures, viscosities, positions_3d_dust, velocities_dust, densities_dust
+
+        return positions_3d, velocities, masses, particle_energies, densities, h_values, accelerations, pressures, viscosities
     
     except Exception as e:
         print(f"Error processing file {file_idx} at time step {dT}: {e}")
         traceback.print_exc()
         raise e
     
-def combine_and_write_results(results, unique_dir, dT, total_files):
-    # Organizar y combinar los resultados por file_idx
+def combine_and_write_results(results, unique_dir, dT, total_files, dust_mode):
+    # Para gas
     for file_idx in range(total_files):
-        file_results = [res for res in results if res[1] == file_idx]
-        combined_results = combine_subsets(file_results)
-        write_to_file(dT, file_idx, combined_results, unique_dir, total_files)
+        file_results = [res for res in results]
+        if dust_mode == 0:
+            combined_results = combine_subsets(file_results)
+            write_to_file(dT, file_idx, combined_results, unique_dir, total_files)
+        else:
+            #print("Dust mode")
+            # Para polvo, maneja los resultados del polvo de manera separada
+            combined_results_dust = combine_dust_subsets(file_results)
+            write_to_file_dust(dT, file_idx, combined_results_dust, unique_dir, total_files)
+            
+            # Además, manejar y escribir los resultados del gas si se requiere
+            combined_results_gas = combine_subsets(file_results)
+            write_to_file(dT, file_idx, combined_results_gas, unique_dir, total_files)
 
 
 def combine_subsets(file_results):
@@ -82,7 +102,10 @@ def combine_subsets(file_results):
     combined_pressures = []
     combined_viscosities = []
 
-    for _, _, positions, velocities, masses, particle_energies, densities, h_values, accelerations, pressures, viscosities in file_results:
+    for result in file_results:
+
+        positions, velocities, masses, particle_energies, densities, h_values, accelerations, pressures, viscosities, *_ = result
+
         combined_positions.extend(positions)
         combined_velocities.extend(velocities)
         combined_masses.extend(masses)
@@ -105,3 +128,30 @@ def combine_subsets(file_results):
     combined_viscosities = np.array(combined_viscosities)
 
     return (combined_positions, combined_velocities, combined_masses, combined_particle_energies, combined_densities, combined_h_values, combined_accelerations, combined_pressures, combined_viscosities)
+
+def combine_dust_subsets(file_results):
+    # Inicializa listas vacías para cada propiedad de las partículas de polvo
+    combined_positions = []
+    combined_velocities = []
+    combined_masses = []
+    combined_densities = []
+    combined_h_values = []
+
+    for result in file_results:
+
+        _, _, masses, _, _, h_values, _, _, _, positions, velocities, densities = result
+
+        combined_positions.extend(positions)
+        combined_velocities.extend(velocities)
+        combined_masses.extend(masses)
+        combined_densities.extend(densities)
+        combined_h_values.extend(h_values)
+
+    # Convertir las listas en arrays de NumPy
+    combined_positions = np.array(combined_positions)
+    combined_velocities = np.array(combined_velocities)
+    combined_masses = np.array(combined_masses)
+    combined_densities = np.array(combined_densities)
+    combined_h_values = np.array(combined_h_values)
+
+    return combined_positions, combined_velocities, combined_masses, combined_densities, combined_h_values
