@@ -21,7 +21,7 @@ def get_dT_range(mode, total_timesteps, dT_initial, dT_final):
     
 def create_tasks(adjusted_dT, params, gamma, ASPECTRATIO, alpha, beta, extrapolation_mode, 
                  rho, phi, theta, r, phimed, rmed, thetamed, vphi, vr, vtheta, u, 
-                 nr, ntheta, total_files, h_mode, vectorized_mode, dust_mode, 
+                 nr, ntheta, total_files, h_mode, vectorized_mode, dust_mode, FRAME="F", OMEGAFRAME=0,
                  rho_dust=None, vphi_dust=None, vr_dust=None, vtheta_dust=None):
     tasks = []
     for file_idx in range(total_files):
@@ -34,11 +34,11 @@ def create_tasks(adjusted_dT, params, gamma, ASPECTRATIO, alpha, beta, extrapola
             if dust_mode == 0:  # Solo gas
                 tasks.append((file_idx, adjusted_dT, params, gamma, ASPECTRATIO, alpha, beta, extrapolation_mode, 
                               Ntot_adjusted, subset_size, rho, phi, theta, r, phimed, rmed, thetamed, 
-                              vphi, vr, vtheta, u, nr, ntheta, start_idx, end_idx, h_mode, vectorized_mode, dust_mode))
+                              vphi, vr, vtheta, u, nr, ntheta, start_idx, end_idx, h_mode, vectorized_mode, dust_mode, FRAME, OMEGAFRAME))
             else:  # Gas y polvo
                 tasks.append((file_idx, adjusted_dT, params, gamma, ASPECTRATIO, alpha, beta, extrapolation_mode, 
                               Ntot_adjusted, subset_size, rho, phi, theta, r, phimed, rmed, thetamed, 
-                              vphi, vr, vtheta, u, nr, ntheta, start_idx, end_idx, h_mode, vectorized_mode, dust_mode,
+                              vphi, vr, vtheta, u, nr, ntheta, start_idx, end_idx, h_mode, vectorized_mode, dust_mode, FRAME, OMEGAFRAME,
                               rho_dust, vphi_dust, vr_dust, vtheta_dust))
     return tasks
 
@@ -56,6 +56,9 @@ def main(total_cpus, output_dir, path_outputs_fargo, total_timesteps, Ntot, alph
     params = read_parameters( path_outputs_fargo + "/variables.par")
     gamma = float(params['GAMMA'])
     ASPECTRATIO = float(params['ASPECTRATIO'])
+    FRAME = str(params['FRAME'])
+    OMEGAFRAME = float(params['OMEGAFRAME']) if FRAME == "G" else 0
+
 
     Ntot_per_file = Ntot // total_files  # number of particles per file
     Ntot = Ntot_per_file * total_files  # total number of particles
@@ -112,8 +115,7 @@ def main(total_cpus, output_dir, path_outputs_fargo, total_timesteps, Ntot, alph
                 vphi_dust = np.fromfile( path_outputs_fargo + '/dust1vx' + dT + '.dat').reshape(len(theta)-1, len(r), len(phi)-1)
                 vr_dust = np.fromfile( path_outputs_fargo + '/dust1vy' + dT + '.dat').reshape(len(theta)-1, len(r), len(phi)-1)
                 vtheta_dust = np.fromfile( path_outputs_fargo + '/dust1vz' + dT + '.dat').reshape(len(theta)-1, len(r), len(phi)-1)
-                tasks = create_tasks(adjusted_dT, params, gamma, ASPECTRATIO, alpha, beta, extrapolation_mode, rho, phi, theta, r, phimed, rmed, thetamed, vphi, vr, vtheta, u, nr, ntheta, total_files, h_mode, vectorized_mode, dust_mode, rho_dust, vphi_dust, vr_dust, vtheta_dust)
-
+                tasks = create_tasks(adjusted_dT, params, gamma, ASPECTRATIO, alpha, beta, extrapolation_mode, rho, phi, theta, r, phimed, rmed, thetamed, vphi, vr, vtheta, u, nr, ntheta, total_files, h_mode, vectorized_mode, dust_mode, FRAME, OMEGAFRAME, rho_dust, vphi_dust, vr_dust, vtheta_dust)
             with ProcessPoolExecutor(max_workers=total_cpus) as executor:
                 futures = [executor.submit(process_file, *task) for task in tasks]
                 all_results = [future.result() for future in as_completed(futures)]

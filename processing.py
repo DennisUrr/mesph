@@ -7,7 +7,7 @@ from utils.sph_utils import compute_smoothing_length_density_based, compute_adap
 from utils.hdf5_utils import write_to_file, write_to_file_dust
 
 
-def process_file(file_idx, dT, params, gamma, ASPECTRATIO, alpha, beta, extrapolation_mode, Ntot, Ntot_per_file, rho, phi, theta, r, phimed, rmed, thetamed, vphi, vr, vtheta, u, nr, ntheta, start_idx, end_idx, h_mode, vectorized_mode, dust_mode, rho_dust=None, vr_dust=None, vphi_dust=None, vtheta_dust=None): 
+def process_file(file_idx, dT, params, gamma, ASPECTRATIO, alpha, beta, extrapolation_mode, Ntot, Ntot_per_file, rho, phi, theta, r, phimed, rmed, thetamed, vphi, vr, vtheta, u, nr, ntheta, start_idx, end_idx, h_mode, vectorized_mode, dust_mode, FRAME, OMEGAFRAME, rho_dust=None, vr_dust=None, vphi_dust=None, vtheta_dust=None): 
     
     try:
         # Sampling the particles for the actual subset
@@ -57,7 +57,7 @@ def process_file(file_idx, dT, params, gamma, ASPECTRATIO, alpha, beta, extrapol
 
         if dust_mode==1:
             rlist_dust, philist_dust, thetalist_dust = sample_particles_3d_partial(rho_dust, phi, theta, rmed, phimed, thetamed, r, start_idx, end_idx)
-            vrlist_dust, vphilist_dust, vthetalist_dust = interpolate_velocities(vr_dust, vphi_dust, vtheta_dust, r, phi, theta, rlist_dust, philist_dust, thetalist_dust)
+            vrlist_dust, vphilist_dust, vthetalist_dust = interpolate_velocities(vr_dust, vphi_dust, vtheta_dust, r, phi, theta, rlist_dust, philist_dust, thetalist_dust, FRAME, OMEGAFRAME)
             densities_dust = assign_particle_densities_from_grid_3d_partial(rho_dust, rlist_dust, philist_dust, thetalist_dust, rmed, phimed, thetamed, start_idx, end_idx)
             x_dust, y_dust, z_dust = to_cartesian(rlist_dust, philist_dust, thetalist_dust)
             vx_dust, vy_dust, vz_dust = velocities_to_cartesian_3d(vrlist_dust, vphilist_dust, vthetalist_dust, rlist_dust, philist_dust, thetalist_dust)

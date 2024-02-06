@@ -17,14 +17,14 @@ def run_splash(total_timesteps, output_dir, dust_mode):
 
 def generate_shell_script(output_dir, script_name, filenames):
     # Construye el comando completo
-    command = ["splash"] + filenames
+    command = ["splash", "-f", "gadget_hdf5"] + filenames
 
     # Genera el script shell
-    full_shell_script_path = os.path.join(output_dir, script_name)
-    with open(full_shell_script_path, "w") as file:
+    
+    with open(script_name, "w") as file:
         file.write("#!/bin/bash\n")
         file.write("cd " + output_dir + "\n")
         file.write(' '.join(command) + "\n")
 
     # Hace el script ejecutable
-    os.chmod(full_shell_script_path, 0o755)
+    os.chmod(script_name, 0o755)

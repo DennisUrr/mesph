@@ -179,7 +179,7 @@ def write_to_file_dust(dT, file_idx, combined_results, unique_dir, total_files, 
     ids = np.arange(Ntot, dtype=np.int32)
 
     # Definir el nombre completo del archivo con la ruta al directorio único
-    filename = os.path.join(unique_dir, f'{base_filename}_dust3d_{int(dT):03d}.{file_idx}.hdf5')
+    filename = os.path.join(unique_dir, f'{base_filename}_dust_{int(dT):03d}.{file_idx}.hdf5')
 
     with h5py.File(filename, 'w') as f:
         # Create the Header group and set attributes
