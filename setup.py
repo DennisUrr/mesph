@@ -17,7 +17,7 @@ setup(
     keywords="sph, eulerian mesh, fargo3d, gadget-3, hdf5, transformation, extrapolation",
     url="https://github.com/DennisUrr/mesph",
     license='LICENSE',
-    scripts=['main.py', 'main_parallel.py', 'measures_error.py', 'processing.py', 'run_splash.py'],
+    scripts=['main.py', 'measures_error.py', 'run_splash.py'],
     long_description=open('README.md').read(),
     include_package_data=True
 )

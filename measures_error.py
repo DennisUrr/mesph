@@ -2,6 +2,7 @@ import numpy as np
 import argparse
 from utils.conversions import to_spherical_velocity, to_cartesian, to_spherical
 from scipy.interpolate import RegularGridInterpolator
+import trilinear
 
 def spherical_to_cartesian(r, theta, phi):
     """
@@ -79,9 +80,9 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description='Parallel particle processing for astrophysical simulations.')
 
-    parser.add_argument('-of', '--output_fargo', type=str, default='../public/outputs/dust3d/', help='Directory containing FARGO3D output files.')
-    parser.add_argument('-om', '--output_mesph', type=str, default='../mesph-remote/outputs/snapshot_p30_n200000_a0.6_b1_tf30_e0_dti90_dtf100_m2_hm0_vm0/', help='Directory containing MESPHRAY output files.')
-    parser.add_argument('-dT', '--time_step', type=str, default='99', help='Time step for data extraction.')
+    parser.add_argument('-of', '--output_fargo', type=str, default='../../Desktop/outputs_fargo3d/dust3d/', help='Directory containing FARGO3D output files.')
+    parser.add_argument('-om', '--output_mesph', type=str, default='/outputs/snapshot_p8_n150000_a0.6_b1_eta1.1_tf8_e1_dti130_dtf132_m2_hm0_vm0_dm1/', help='Directory containing MESPHRAY output files.')
+    parser.add_argument('-dT', '--time_step', type=str, default='130', help='Time step for data extraction.')
 
     args = parser.parse_args()
 
@@ -91,7 +92,7 @@ if __name__ == "__main__":
 
     phi, r, theta, rho, vphi, vr, vtheta, u = load_data_fargo(path_outputs_fargo, dT)
     #print(f"phi.shape: {phi.shape}, r.shape: {r.shape}, theta.shape: {theta.shape}, rho.shape: {rho.shape}, vphi.shape: {vphi.shape}, vr.shape: {vr.shape}, vtheta.shape: {vtheta.shape}, u.shape: {u.shape}")
-    rho_array, xmin, xmax, ymin, ymax, zmin, zmax, nx, ny, nz = load_data_mesph(path_outputs_mesph, '8')
+    rho_array, xmin, xmax, ymin, ymax, zmin, zmax, nx, ny, nz = load_data_mesph(path_outputs_mesph, '0')
 
     print(rho_array.shape)
 
@@ -101,11 +102,10 @@ if __name__ == "__main__":
     y_cartesian = np.linspace(ymin, ymax, ny)
     z_cartesian = np.linspace(zmin, zmax, nz)
 
-    interpolator = RegularGridInterpolator((theta[:-1], r, phi[:-1]), rho, bounds_error=False, fill_value=None)
 
     cartesian_points = np.array(np.meshgrid(x_cartesian, y_cartesian, z_cartesian)).T.reshape(-1, 3)
 
-    rho_interpolated = interpolator(cartesian_points).reshape(nx, ny, nz)
+    rho_interpolated = trilinear.trilinear(rho, r, phi, x_cartesian, y_cartesian, z_cartesian, np.min(rho))
 
     rmse = calculate_rmse(rho_interpolated, rho_array)
 
