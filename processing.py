@@ -7,7 +7,7 @@ from utils.sph_utils import compute_smoothing_length_density_based, compute_adap
 from utils.hdf5_utils import write_to_file, write_to_file_dust
 
 
-def process_file(file_idx, dT, params, gamma, ASPECTRATIO, alpha, beta, extrapolation_mode, Ntot, Ntot_per_file, rho, phi, theta, r, phimed, rmed, thetamed, vphi, vr, vtheta, u, nr, ntheta, start_idx, end_idx, h_mode, vectorized_mode, dust_mode, FRAME, OMEGAFRAME, rho_dust=None, vr_dust=None, vphi_dust=None, vtheta_dust=None): 
+def process_file(file_idx, dT, params, gamma, ASPECTRATIO, alpha, beta, eta, extrapolation_mode, Ntot, Ntot_per_file, rho, phi, theta, r, phimed, rmed, thetamed, vphi, vr, vtheta, u, nr, ntheta, start_idx, end_idx, h_mode, vectorized_mode, dust_mode, FRAME, OMEGAFRAME, rho_dust=None, vr_dust=None, vphi_dust=None, vtheta_dust=None): 
     
     try:
         # Sampling the particles for the actual subset
@@ -38,7 +38,7 @@ def process_file(file_idx, dT, params, gamma, ASPECTRATIO, alpha, beta, extrapol
         # Compute smoothing lengths
         
         if h_mode == 0:
-            h_values = compute_smoothing_length_density_based(masses, densities)
+            h_values = compute_smoothing_length_density_based(masses, densities, eta)
         elif h_mode == 1:
             h_values = compute_adaptive_smoothing_length_adaptative(positions_3d, densities)
         elif h_mode == 2:

@@ -20,6 +20,7 @@ def create_unique_directory(base_path, args):
         'particles': 'n',
         'alpha': 'a',
         'beta': 'b',
+        'eta': 'eta',
         'extrapolation': 'e',
         'total_files': 'tf',
         'dT_initial': 'dti',
