@@ -213,60 +213,6 @@ def get_local_average(array, itheta, ir, iphi):
     phi_start, phi_end = max(iphi-1, 0), min(iphi+2, array.shape[2])
     
     return np.mean(array[theta_start:theta_end, r_start:r_end, phi_start:phi_end])
-
-#@numba.njit
-def sample_particles_3d_with_velocity_density(rho, phi, theta, rmed, phimed, thetamed, r, vphi, vr, vtheta, start_idx, end_idx):
-    try:
-        local_Ntot = end_idx - start_idx
-        sigma = rho.sum(axis=0)  # Suma a lo largo del eje de 'theta'
-        P = (sigma - sigma.min()) / sigma.ptp()
-
-        philist = np.zeros(local_Ntot)
-        rlist = np.zeros(local_Ntot)
-        thetalist = np.zeros(local_Ntot)
-        
-        vphilist = np.zeros(local_Ntot)
-        vrlist = np.zeros(local_Ntot)
-        vthetalist = np.zeros(local_Ntot)
-
-        rholist = np.zeros(local_Ntot)
-
-        #area in the face of the plane
-        phi_area = (phi.max() - phi.min()) / (len(phi) - 1)
-        r_area = (r.max() - r.min()) / (len(r) - 4)  # ajuste debido a [3:-4] al cargar 'r'
-        theta_area = (theta.max() - theta.min()) / (len(theta) - 1)
-
-        N = start_idx
-        while N < end_idx:
-            _phi = np.random.uniform(phi.min(), phi.max())
-            _r = np.random.uniform(r.min(), r.max())
-            _theta = np.random.uniform(theta.min(), theta.max())
-            
-            # representative point of the cell 
-            iphi = min(int((_phi - phi.min()) / phi_area), len(phimed) - 1)
-            ir = min(int((_r - r.min()) / r_area), len(rmed) - 4)
-            itheta = min(int((_theta - theta.min()) / theta_area), len(thetamed) - 1)
-            _w = np.random.rand()
-            
-            if _w < P[ir, iphi]:
-                philist[N - start_idx] = _phi
-                rlist[N - start_idx] = _r
-                thetalist[N - start_idx] = theta[itheta]
-                
-                # Ahora sampleamos las velocidades
-                # Aquí usamos los índices ir, iphi, itheta para obtener las velocidades
-                # Podemos hacer un promedio simple o ponderado de las velocidades en los puntos cercanos
-                vphilist[N - start_idx] = get_local_average(vphi, itheta, ir, iphi)
-                vrlist[N - start_idx] = get_local_average(vr, itheta, ir, iphi)
-                vthetalist[N - start_idx] = get_local_average(vtheta, itheta, ir, iphi)
-                rholist[N - start_idx] = get_local_average(rho, itheta, ir, iphi)
-                N += 1
-
-        return rlist, philist, thetalist, vrlist, vphilist, vthetalist, rholist
-    except Exception as e:
-        print(f"Error sampling velocities: {e}")
-        traceback.print_exc()
-        raise e
     
 
 #@numba.njit
@@ -325,7 +271,7 @@ def sample_particles_3d_with_velocity_density(rho, phi, theta, rmed, phimed, the
 
 
 
-def interpolate_velocities(vr, vphi, vtheta, r, phi, theta, r_particles, phi_particles, theta_particles):
+def interpolate_velocities(vr, vphi, vtheta, r, phi, theta, r_particles, phi_particles, theta_particles, FRAME="F", OMEGAFRAME=0):
     """
     Interpolates the velocities at the given particle positions using trilinear interpolation
     in spherical coordinates, accounting for the extra point in theta and phi.
@@ -362,5 +308,9 @@ def interpolate_velocities(vr, vphi, vtheta, r, phi, theta, r_particles, phi_par
     vr_interp = vr_interpolator(particle_positions)
     vphi_interp = vphi_interpolator(particle_positions)
     vtheta_interp = vtheta_interpolator(particle_positions)
+
+    if FRAME == "G":
+        # Asume que r_particles es un array de las distancias radiales de las partículas
+        vphi_interp += r_particles * OMEGAFRAME
 
     return vr_interp, vphi_interp, vtheta_interp

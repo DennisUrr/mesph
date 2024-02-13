@@ -17,9 +17,12 @@ def get_dT_range(mode, total_timesteps, dT_initial, dT_final):
     elif mode == 1:
         return range(dT_initial, dT_initial + total_timesteps)
     else:
-        return range(dT_initial, dT_final + 1)
+        return range(dT_initial, dT_final)
     
-def create_tasks(adjusted_dT, params, gamma, ASPECTRATIO, alpha, beta, extrapolation_mode, rho, phi, theta, r, phimed, rmed, thetamed, vphi, vr, vtheta, u, nr, ntheta, total_files, h_mode, vectorized_mode):
+def create_tasks(adjusted_dT, params, gamma, ASPECTRATIO, alpha, beta, eta, extrapolation_mode, 
+                 rho, phi, theta, r, phimed, rmed, thetamed, vphi, vr, vtheta, u, 
+                 nr, ntheta, total_files, h_mode, vectorized_mode, dust_mode, FRAME="F", OMEGAFRAME=0,
+                 rho_dust=None, vphi_dust=None, vr_dust=None, vtheta_dust=None):
     tasks = []
     for file_idx in range(total_files):
         subset_size = Ntot // (total_files * total_cpus)
@@ -27,11 +30,20 @@ def create_tasks(adjusted_dT, params, gamma, ASPECTRATIO, alpha, beta, extrapola
         for proc_idx in range(total_cpus):
             start_idx = proc_idx * subset_size + (file_idx * subset_size * total_cpus)
             end_idx = start_idx + subset_size
-            # Crea la tarea
-            tasks.append((file_idx, adjusted_dT, params, gamma, ASPECTRATIO, alpha, beta, extrapolation_mode, Ntot_adjusted, subset_size, rho, phi, theta, r, phimed, rmed, thetamed, vphi, vr, vtheta, u, nr, ntheta, start_idx, end_idx, h_mode, vectorized_mode))
+            # Crea la tarea dependiendo del modo
+            if dust_mode == 0:  # Solo gas
+                tasks.append((file_idx, adjusted_dT, params, gamma, ASPECTRATIO, alpha, beta, eta, extrapolation_mode, 
+                              Ntot_adjusted, subset_size, rho, phi, theta, r, phimed, rmed, thetamed, 
+                              vphi, vr, vtheta, u, nr, ntheta, start_idx, end_idx, h_mode, vectorized_mode, dust_mode, FRAME, OMEGAFRAME))
+            else:  # Gas y polvo
+                tasks.append((file_idx, adjusted_dT, params, gamma, ASPECTRATIO, alpha, beta, eta, extrapolation_mode, 
+                              Ntot_adjusted, subset_size, rho, phi, theta, r, phimed, rmed, thetamed, 
+                              vphi, vr, vtheta, u, nr, ntheta, start_idx, end_idx, h_mode, vectorized_mode, dust_mode, FRAME, OMEGAFRAME,
+                              rho_dust, vphi_dust, vr_dust, vtheta_dust))
     return tasks
 
-def main(total_cpus, output_dir, path_outputs_fargo, total_timesteps, Ntot, alpha, beta, extrapolation_mode, total_files, h_mode, vectorized_mode, mode, args, dT_initial=None, dT_final=None):
+
+def main(total_cpus, output_dir, path_outputs_fargo, total_timesteps, Ntot, alpha, beta, eta, extrapolation_mode, total_files, h_mode, vectorized_mode, mode, dust_mode, args, dT_initial=None, dT_final=None):
     
     dT=str(0)
 
@@ -44,6 +56,9 @@ def main(total_cpus, output_dir, path_outputs_fargo, total_timesteps, Ntot, alph
     params = read_parameters( path_outputs_fargo + "/variables.par")
     gamma = float(params['GAMMA'])
     ASPECTRATIO = float(params['ASPECTRATIO'])
+    FRAME = str(params['FRAME'])
+    OMEGAFRAME = float(params['OMEGAFRAME']) if FRAME == "G" else 0
+
 
     Ntot_per_file = Ntot // total_files  # number of particles per file
     Ntot = Ntot_per_file * total_files  # total number of particles
@@ -83,19 +98,29 @@ def main(total_cpus, output_dir, path_outputs_fargo, total_timesteps, Ntot, alph
             # load the gas internal energy
             u = np.fromfile( path_outputs_fargo + '/gasenergy' + dT + '.dat').reshape(len(theta)-1, len(r), len(phi)-1)
             
-            # print("FARGO3D files loaded") 
-
             # Ajusta dT según el modo
             adjusted_dT = str(int(dT) - dT_initial) if mode != 0 else str(dT)
 
             # Crea las tareas para cada archivo y cada subconjunto de partículas
             output_dT = idx
-            tasks = create_tasks(adjusted_dT, params, gamma, ASPECTRATIO, alpha, beta, extrapolation_mode, rho, phi, theta, r, phimed, rmed, thetamed, vphi, vr, vtheta, u, nr, ntheta, total_files, h_mode, vectorized_mode)
+            
+            if dust_mode == 0:
+                tasks = create_tasks(adjusted_dT, params, gamma, ASPECTRATIO, alpha, beta, eta, extrapolation_mode, rho, phi, theta, r, phimed, rmed, thetamed, vphi, vr, vtheta, u, nr, ntheta, total_files, h_mode, vectorized_mode, dust_mode)
+            
+            elif dust_mode == 1:
+                # load the dust density
+                rho_dust = np.fromfile( path_outputs_fargo + '/dust1dens' + dT + '.dat').reshape(len(theta)-1,len(r),len(phi)-1)
+                
+                # load the dust velocities
+                vphi_dust = np.fromfile( path_outputs_fargo + '/dust1vx' + dT + '.dat').reshape(len(theta)-1, len(r), len(phi)-1)
+                vr_dust = np.fromfile( path_outputs_fargo + '/dust1vy' + dT + '.dat').reshape(len(theta)-1, len(r), len(phi)-1)
+                vtheta_dust = np.fromfile( path_outputs_fargo + '/dust1vz' + dT + '.dat').reshape(len(theta)-1, len(r), len(phi)-1)
+                tasks = create_tasks(adjusted_dT, params, gamma, ASPECTRATIO, alpha, beta, eta, extrapolation_mode, rho, phi, theta, r, phimed, rmed, thetamed, vphi, vr, vtheta, u, nr, ntheta, total_files, h_mode, vectorized_mode, dust_mode, FRAME, OMEGAFRAME, rho_dust, vphi_dust, vr_dust, vtheta_dust)
             with ProcessPoolExecutor(max_workers=total_cpus) as executor:
                 futures = [executor.submit(process_file, *task) for task in tasks]
                 all_results = [future.result() for future in as_completed(futures)]
 
-            combine_and_write_results(all_results, unique_dir, output_dT, total_files)
+            combine_and_write_results(all_results, unique_dir, output_dT, total_files, dust_mode)
             progress_bar.update(total_files)
     progress_bar.close()
 
@@ -107,7 +132,7 @@ def main(total_cpus, output_dir, path_outputs_fargo, total_timesteps, Ntot, alph
         print(f"El directorio {destination_directory} no existe.")
 
     copy_files_to_directory(source_files, destination_directory)
-    run_splash(total_timesteps, unique_dir)
+    run_splash(total_timesteps, unique_dir, dust_mode)
 
 if __name__ == '__main__':
 
@@ -137,6 +162,9 @@ if __name__ == '__main__':
     # Beta parameter for artificial viscosity
     parser.add_argument('-b', '--beta', type=float, default=1, help='Beta parameter for artificial viscosity.')
     
+    # eta parameter for smoothing length
+    parser.add_argument('-eta', '--eta', type=float, default=1.2, help='Eta parameter for smoothing length.')
+
     # Number of files to create
     parser.add_argument('-tf', '--total_files', type=int, default=2, help='Number of files to create 0->(-tf)-1.')
 
@@ -157,6 +185,9 @@ if __name__ == '__main__':
 
     # Mode to compute the functions
     parser.add_argument('-vm', '--vectorized_mode', type=int, default=0, help='Mode: 0 = no vectorized, 1 = vectorized.')
+
+    # Mode for compute the dust
+    parser.add_argument('-dm', '--dust_mode', type=int, default=0, help='Mode: 0 = no dust, 1 = dust.')
     
     args = parser.parse_args()
     total_cpus = args.processors
@@ -166,6 +197,7 @@ if __name__ == '__main__':
     Ntot = args.particles
     alpha = args.alpha
     beta = args.beta
+    eta = float(args.eta)
     extrapolation_mode = args.extrapolation
     total_files = int(args.total_files)
     dT_initial = args.dT_initial
@@ -173,18 +205,19 @@ if __name__ == '__main__':
     mode = args.mode
     h_mode = args.smoothig_length_mode
     vectorized_mode = args.vectorized_mode
+    dust_mode = args.dust_mode
 
     if mode == 0:
         dT_initial = None
         dT_final = None
-        main(total_cpus, output_dir, path_outputs_fargo, total_timesteps, Ntot, alpha, beta, extrapolation_mode, total_files, h_mode, vectorized_mode, mode, args)
+        main(total_cpus, output_dir, path_outputs_fargo, total_timesteps, Ntot, alpha, beta, eta, extrapolation_mode, total_files, h_mode, vectorized_mode, mode, dust_mode, args)
         
     elif mode == 1:
         dT_final = None
-        main(total_cpus, output_dir, path_outputs_fargo, total_timesteps, Ntot, alpha, beta, extrapolation_mode, total_files, h_mode, vectorized_mode, mode, args, dT_initial)
+        main(total_cpus, output_dir, path_outputs_fargo, total_timesteps, Ntot, alpha, beta, eta, extrapolation_mode, total_files, h_mode, vectorized_mode, mode, dust_mode, args, dT_initial)
         
     else:
-        main(total_cpus, output_dir, path_outputs_fargo, total_timesteps, Ntot, alpha, beta, extrapolation_mode, total_files, h_mode, vectorized_mode, mode, args, dT_initial, dT_final)
+        main(total_cpus, output_dir, path_outputs_fargo, total_timesteps, Ntot, alpha, beta, eta, extrapolation_mode, total_files, h_mode, vectorized_mode, mode, dust_mode, args, dT_initial, dT_final)
         
     
     print(f"Tiempo total: {round(time.time() - init_time, 5)} segundos.")
