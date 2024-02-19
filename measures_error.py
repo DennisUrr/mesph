@@ -80,8 +80,8 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description='Parallel particle processing for astrophysical simulations.')
 
-    parser.add_argument('-of', '--output_fargo', type=str, default='../../Desktop/outputs_fargo3d/dust3d/', help='Directory containing FARGO3D output files.')
-    parser.add_argument('-om', '--output_mesph', type=str, default='/outputs/snapshot_p8_n150000_a0.6_b1_eta1.1_tf8_e1_dti130_dtf132_m2_hm0_vm0_dm1/', help='Directory containing MESPHRAY output files.')
+    parser.add_argument('-of', '--output_fargo', type=str, default='outputs_fargo/', help='Directory containing FARGO3D output files.')
+    parser.add_argument('-om', '--output_mesph', type=str, default='outputs/snapshot_p8_n150000_a0.6_b1_eta1.1_tf8_e1_dti130_dtf132_m2_hm0_vm0_dm1/', help='Directory containing MESPHRAY output files.')
     parser.add_argument('-dT', '--time_step', type=str, default='130', help='Time step for data extraction.')
 
     args = parser.parse_args()
@@ -103,10 +103,8 @@ if __name__ == "__main__":
     z_cartesian = np.linspace(zmin, zmax, nz)
 
 
-    cartesian_points = np.array(np.meshgrid(x_cartesian, y_cartesian, z_cartesian)).T.reshape(-1, 3)
+    rho_interpolated = trilinear.trilinear(rho, r, phi[:-1], theta[:-1], z_cartesian, y_cartesian, x_cartesian, np.min(rho))
 
-    rho_interpolated = trilinear.trilinear(rho, r, phi, x_cartesian, y_cartesian, z_cartesian, np.min(rho))
-
-    rmse = calculate_rmse(rho_interpolated, rho_array)
+    rmse = calculate_rmse(rho_array, rho_interpolated)
 
     print(f"RMSE: {rmse}")
