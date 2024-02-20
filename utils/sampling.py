@@ -314,3 +314,79 @@ def interpolate_velocities(vr, vphi, vtheta, r, phi, theta, r_particles, phi_par
         vphi_interp += r_particles * OMEGAFRAME
 
     return vr_interp, vphi_interp, vtheta_interp
+
+from scipy.interpolate import RegularGridInterpolator
+import numpy as np
+
+def interpolate_densities(rho, r, phi, theta, r_particles, phi_particles, theta_particles):
+    """
+    Interpolates the densities at the given particle positions using trilinear interpolation
+    in spherical coordinates.
+
+    Parameters:
+    rho : 3D numpy array of the density in spherical coordinates (r, phi, theta).
+    r, phi, theta : 1D numpy arrays representing the grid points in spherical coordinates, with theta and phi
+                    possibly including an extra point for the domain closure.
+    r_particles, phi_particles, theta_particles : 1D numpy arrays of the particle positions in spherical coordinates.
+
+    Returns:
+    rho_interp : 1D numpy array of interpolated densities at particle positions.
+    """
+    # Adjust theta and phi to meet the requirements of the interpolator
+    # Removing the extra point for theta and phi to match the density dimensions
+    theta_adjusted = theta[:-1]
+    phi_adjusted = phi[:-1]
+
+    # Prepare the grid points for interpolation
+    grid_for_interpolation = (theta_adjusted, r, phi_adjusted)
+
+    # Create interpolator for the density
+    rho_interpolator = RegularGridInterpolator(grid_for_interpolation, rho, bounds_error=False, fill_value=None)
+
+    # Ensure the phi values of particles are within the correct range
+    phi_particles_adjusted = np.mod(phi_particles, 2 * np.pi)
+
+    # Prepare particle positions for interpolation
+    particle_positions = np.vstack((theta_particles, r_particles, phi_particles_adjusted)).T
+
+    # Interpolate densities at the particles' positions
+    rho_interp = rho_interpolator(particle_positions)
+
+    return rho_interp
+
+def interpolate_internal_energies(grid_energies, r, phi, theta, r_particles, phi_particles, theta_particles):
+    """
+    Interpolates internal energies at the given particle positions using trilinear interpolation
+    in spherical coordinates.
+
+    Parameters:
+    - grid_energies: 3D numpy array of the internal energy in spherical coordinates (r, phi, theta).
+    - r, phi, theta: 1D numpy arrays representing the grid points in spherical coordinates, with theta and phi
+                      possibly including an extra point for the domain closure.
+    - r_particles, phi_particles, theta_particles: 1D numpy arrays of the particle positions in spherical coordinates.
+
+    Returns:
+    - energies_interp: 1D numpy array of interpolated internal energies at particle positions.
+    """
+
+    # Adjust theta and phi to meet the requirements of the interpolator
+    # Removing the extra point for theta and phi to match the internal energy grid dimensions
+    theta_adjusted = theta[:-1]
+    phi_adjusted = phi[:-1]
+
+    # Prepare the grid points for interpolation
+    grid_for_interpolation = (theta_adjusted, r, phi_adjusted)
+
+    # Create an interpolator for the internal energy grid
+    energy_interpolator = RegularGridInterpolator(grid_for_interpolation, grid_energies, bounds_error=False, fill_value=None)
+
+    # Ensure the phi values of particles are within the correct range
+    phi_particles_adjusted = np.mod(phi_particles, 2 * np.pi)
+
+    # Prepare particle positions for interpolation
+    particle_positions = np.vstack((theta_particles, r_particles, phi_particles_adjusted)).T
+
+    # Interpolate internal energies at the particles' positions
+    energies_interp = energy_interpolator(particle_positions)
+
+    return energies_interp

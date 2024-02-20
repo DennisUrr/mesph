@@ -3,6 +3,8 @@ import argparse
 from utils.conversions import to_spherical_velocity, to_cartesian, to_spherical
 from scipy.interpolate import RegularGridInterpolator
 import trilinear
+from utils.parameters import read_parameters
+from run_splash import generate_shell_script_measures_errors
 
 def spherical_to_cartesian(r, theta, phi):
     """
@@ -81,7 +83,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Parallel particle processing for astrophysical simulations.')
 
     parser.add_argument('-of', '--output_fargo', type=str, default='outputs_fargo/', help='Directory containing FARGO3D output files.')
-    parser.add_argument('-om', '--output_mesph', type=str, default='outputs/snapshot_p8_n150000_a0.6_b1_eta1.1_tf8_e1_dti130_dtf132_m2_hm0_vm0_dm1/', help='Directory containing MESPHRAY output files.')
+    parser.add_argument('-om', '--output_mesph', type=str, default='outputs/snapshot_p8_n100000_a0.6_b1_eta1_tf8_e1_dti130_m1_hm0_vm0_dm1/', help='Directory containing MESPHRAY output files.')
     parser.add_argument('-dT', '--time_step', type=str, default='130', help='Time step for data extraction.')
 
     args = parser.parse_args()
@@ -89,6 +91,7 @@ if __name__ == "__main__":
     path_outputs_fargo = args.output_fargo
     path_outputs_mesph = args.output_mesph
     dT = args.time_step
+
 
     phi, r, theta, rho, vphi, vr, vtheta, u = load_data_fargo(path_outputs_fargo, dT)
     #print(f"phi.shape: {phi.shape}, r.shape: {r.shape}, theta.shape: {theta.shape}, rho.shape: {rho.shape}, vphi.shape: {vphi.shape}, vr.shape: {vr.shape}, vtheta.shape: {vtheta.shape}, u.shape: {u.shape}")
@@ -108,3 +111,6 @@ if __name__ == "__main__":
     rmse = calculate_rmse(rho_array, rho_interpolated)
 
     print(f"RMSE: {rmse}")
+
+
+

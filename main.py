@@ -6,7 +6,7 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 from utils.parameters import read_parameters
 from processing import process_file, combine_and_write_results
 from utils.hdf5_utils import create_unique_directory, copy_files_to_directory, write_to_file
-from run_splash import run_splash
+from run_splash import run_splash, generate_shell_script_measures_errors
 import argparse
 from tqdm import tqdm
 
@@ -133,6 +133,7 @@ def main(total_cpus, output_dir, path_outputs_fargo, total_timesteps, Ntot, alph
 
     copy_files_to_directory(source_files, destination_directory)
     run_splash(total_timesteps, unique_dir, dust_mode)
+    generate_shell_script_measures_errors(f'outputs/{unique_dir}' , int(params['NX']), int(params['NY']), int(params['NZ']))
 
 if __name__ == '__main__':
 
