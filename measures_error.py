@@ -83,8 +83,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Parallel particle processing for astrophysical simulations.')
 
     parser.add_argument('-of', '--output_fargo', type=str, default='outputs_fargo/', help='Directory containing FARGO3D output files.')
-    parser.add_argument('-om', '--output_mesph', type=str, default='outputs/snapshot_p8_n100000_a0.6_b1_eta1_tf8_e1_dti130_m1_hm0_vm0_dm1/', help='Directory containing MESPHRAY output files.')
-    parser.add_argument('-dT', '--time_step', type=str, default='130', help='Time step for data extraction.')
+    parser.add_argument('-om', '--output_mesph', type=str, default='outputs/snapshot_p20_n1000000_a0.6_b1_eta1.0_tf8_e1_dti130_m1_hm0_vm0_dm1/', help='Directory containing MESPHRAY output files.')
+    parser.add_argument('-dT', '--time_step', type=str, default='131', help='Time step for data extraction.')
 
     args = parser.parse_args()
 
@@ -95,9 +95,7 @@ if __name__ == "__main__":
 
     phi, r, theta, rho, vphi, vr, vtheta, u = load_data_fargo(path_outputs_fargo, dT)
     #print(f"phi.shape: {phi.shape}, r.shape: {r.shape}, theta.shape: {theta.shape}, rho.shape: {rho.shape}, vphi.shape: {vphi.shape}, vr.shape: {vr.shape}, vtheta.shape: {vtheta.shape}, u.shape: {u.shape}")
-    rho_array, xmin, xmax, ymin, ymax, zmin, zmax, nx, ny, nz = load_data_mesph(path_outputs_mesph, '0')
-
-    print(rho_array.shape)
+    rho_array, xmin, xmax, ymin, ymax, zmin, zmax, nx, ny, nz = load_data_mesph(path_outputs_mesph, '1')
 
     x, y, z = spherical_to_cartesian(r, theta, phi)
     
@@ -106,11 +104,14 @@ if __name__ == "__main__":
     z_cartesian = np.linspace(zmin, zmax, nz)
 
 
-    rho_interpolated = trilinear.trilinear(rho, r, phi[:-1], theta[:-1], z_cartesian, y_cartesian, x_cartesian, np.min(rho))
+    rho_interpolated_1 = trilinear.trilinear(rho, r, phi[:-1], theta[:-1], z_cartesian, y_cartesian, x_cartesian, np.min(rho))
 
-    rmse = calculate_rmse(rho_array, rho_interpolated)
+    mae = calculate_mae(rho_array, rho_interpolated_1)
+    rmse= calculate_rmse(rho_array, rho_interpolated_1)
+
 
     print(f"RMSE: {rmse}")
+    print(f"MAE: {mae}")
 
 
 

@@ -34,7 +34,7 @@ def generate_shell_script_measures_errors(output_dir, NX, NY, NZ):
 
     base_filename = "snapshot_3d"
     script_name = "run_measures_error.sh"
-    filenames = [f'{base_filename}_{t:03d}.0.hdf5' for t in range(1)]
+    filenames = [f'{base_filename}_{t:03d}.0.hdf5' for t in range(2)]
     
 
     # Construye el comando completo

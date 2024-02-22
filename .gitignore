@@ -6,6 +6,7 @@ __pycache__/
 /mesph/outputs/*
 /outputs/
 /outputs/*
+outputs/.DS_Store
 # C extensions
 *.so
 
@@ -126,10 +127,13 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
-.run_splash.sh
+.run_splash_gas.sh
+.run_splash_dust.sh
 
 .DS_Store
 
 .vscode/
 outputs/.DS_Store
 outputs_fargo/
+run_measures_error.sh
+run_measures_error_1.sh

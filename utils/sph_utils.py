@@ -93,9 +93,9 @@ def compute_smoothing_length_density_based(masses, densities, eta=1.2, dimension
 
     # Calculate the volume represented by each particle
     np.divide(masses, densities, out=volumes, where=densities!=0)
-    
+
     # Calculate the adaptive smoothing length
-    smoothing_lengths = eta * np.power(volumes, ((1.0 / dimension)))
+    smoothing_lengths = eta * np.power(volumes, (1.0 / dimension))
     
     return smoothing_lengths
 

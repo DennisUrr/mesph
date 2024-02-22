@@ -352,6 +352,7 @@ def interpolate_densities(rho, r, phi, theta, r_particles, phi_particles, theta_
     # Interpolate densities at the particles' positions
     rho_interp = rho_interpolator(particle_positions)
 
+    rho_interp = np.maximum(rho_interp, 1e-05)
     return rho_interp
 
 def interpolate_internal_energies(grid_energies, r, phi, theta, r_particles, phi_particles, theta_particles):

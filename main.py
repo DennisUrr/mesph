@@ -133,7 +133,7 @@ def main(total_cpus, output_dir, path_outputs_fargo, total_timesteps, Ntot, alph
 
     copy_files_to_directory(source_files, destination_directory)
     run_splash(total_timesteps, unique_dir, dust_mode)
-    generate_shell_script_measures_errors(f'outputs/{unique_dir}' , int(params['NX']), int(params['NY']), int(params['NZ']))
+    generate_shell_script_measures_errors(unique_dir , int(params['NX']), int(params['NY']), int(params['NZ']))
 
 if __name__ == '__main__':
 
