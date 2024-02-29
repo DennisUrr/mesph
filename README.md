@@ -34,8 +34,8 @@ You can run the script with custom parameters like this:
 python3 main.py -p 30 -t 20 -tf 8 -n 100000
 ```
 
-Once its done, it will generate a executable file called run_splash.sh that you can run on the command line. For this you need an X server if you want to use it interactive. 
+Once its done, it will generate a executable file called run_splash_gas.sh that you can run on the command line. For this you need an X server if you want to use it interactive. 
 
 ```bash
-./run_splash.sh
+./run_splash_gas.sh
 ```
