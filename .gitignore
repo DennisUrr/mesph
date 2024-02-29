@@ -129,13 +129,23 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
-.run_splash_gas.sh
-.run_splash_dust.sh
+run_splash_gas.sh
+run_splash_dust.sh
+run_measures_error.sh
+run_measures_error_1.sh
 
 .DS_Store
 
 .vscode/
 outputs/.DS_Store
 outputs_fargo/
-run_measures_error.sh
-run_measures_error_1.sh
+/run_measures_error.sh
+/run_measures_error_1.sh
+/run_splash_gas.sh
+/run_splash_dust.sh
+
+
+.run_splash_gas.sh
+.run_splash_dust.sh
+.run_measures_error.sh
+.run_measures_error_1.sh
