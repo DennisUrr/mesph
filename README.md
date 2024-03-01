@@ -2,6 +2,14 @@
 
 This code transalate the outputs of FARGO3D to a format that splash can read by extrapolating the data. Until the moment, this only translate to a GADGET-2 file with HDF5 format using two methods: a probabilistic one and a trilineal interpolation.
 
+##Instalation
+
+You can install the program via pip:
+
+```bash
+pip3 install mesph
+```
+
 ## Usage
 
 The script `main_parallel.py` can be executed with several optional arguments to customize its behavior. It is designed to create multiple output files for each Fargo output file, with the number of output files being equal to the number of processors used.
